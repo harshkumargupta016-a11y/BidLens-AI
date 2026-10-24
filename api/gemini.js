@@ -50,7 +50,7 @@ module.exports = async function gemini(req, res) {
 
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
-    return sendJson(res, 503, { error: 'GEMINI_API_KEY is not configured for this deployment.' });
+    return sendJson(res, 503, { error: 'GEMINI_API_KEY is not configured in your deployment environment variables.' });
   }
 
   let body;
@@ -64,7 +64,7 @@ module.exports = async function gemini(req, res) {
     return sendJson(res, 400, { error: 'A non-empty prompt is required.' });
   }
 
-  const model = process.env.GEMINI_MODEL || 'gemini-3.8-flash';
+  const model = process.env.GEMINI_MODEL || 'gemini-3.5-flash';
   try {
     const response = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,
