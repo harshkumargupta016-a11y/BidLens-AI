@@ -1,6 +1,7 @@
 const http = require('node:http');
 const fs = require('node:fs');
 const path = require('node:path');
+const { execFile } = require('node:child_process');
 
 const root = __dirname;
 
@@ -114,37 +115,57 @@ async function handleGemini(req, res) {
   }
 }
 
-const server = http.createServer(async (req, res) => {
-  const pathname = new URL(req.url, 'http://localhost').pathname;
+function startServer(candidatePort, attempts = 0) {
+  const instance = http.createServer(async (req, res) => {
+    const pathname = new URL(req.url, 'http://localhost').pathname;
 
-  if (pathname === '/api/gemini') {
-    await handleGemini(req, res);
-    return;
-  }
-
-  if ((pathname === '/' || pathname === '/index.html') && ['GET', 'HEAD'].includes(req.method)) {
-    res.writeHead(200, {
-      'Content-Type': 'text/html; charset=utf-8',
-      'Cache-Control': 'no-cache',
-      'X-Content-Type-Options': 'nosniff',
-    });
-    if (req.method === 'HEAD') {
-      res.end();
-    } else {
-      fs.createReadStream(path.join(root, 'index.html')).pipe(res);
+    if (pathname === '/api/gemini') {
+      await handleGemini(req, res);
+      return;
     }
-    return;
-  }
 
-  res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
-  res.end('Not found');
-});
+    if ((pathname === '/' || pathname === '/index.html') && ['GET', 'HEAD'].includes(req.method)) {
+      res.writeHead(200, {
+        'Content-Type': 'text/html; charset=utf-8',
+        'Cache-Control': 'no-cache',
+        'X-Content-Type-Options': 'nosniff',
+      });
+      if (req.method === 'HEAD') {
+        res.end();
+      } else {
+        fs.createReadStream(path.join(root, 'index.html')).pipe(res);
+      }
+      return;
+    }
 
-server.on('error', (error) => {
-  console.error(`Could not start BidLens server: ${error.message}`);
+    res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
+    res.end('Not found');
+  });
+
+  instance.once('error', (error) => {
+    if (error.code === 'EADDRINUSE' && attempts < 20) {
+      console.warn(`Port ${candidatePort} is in use; trying ${candidatePort + 1}.`);
+      startServer(candidatePort + 1, attempts + 1);
+      return;
+    }
+    console.error(`Could not start BidLens server: ${error.message}`);
+    process.exitCode = 1;
+  });
+
+  instance.listen(candidatePort, '127.0.0.1', () => {
+    const url = `http://127.0.0.1:${candidatePort}`;
+    console.log(`BidLens is running at ${url}`);
+    if (process.env.BIDLENS_OPEN_BROWSER === '1') {
+      execFile('cmd.exe', ['/c', 'start', '', url], (error) => {
+        if (error) console.error(`Could not open browser automatically: ${error.message}`);
+      });
+    }
+  });
+}
+
+if (!Number.isInteger(port) || port < 1 || port > 65535) {
+  console.error('PORT must be a number from 1 to 65535.');
   process.exitCode = 1;
-});
-
-server.listen(port, '127.0.0.1', () => {
-  console.log(`BidLens is running at http://127.0.0.1:${port}`);
-});
+} else {
+  startServer(port);
+}
