@@ -64,7 +64,7 @@ module.exports = async function gemini(req, res) {
     return sendJson(res, 400, { error: 'A non-empty prompt is required.' });
   }
 
-  const model = process.env.GEMINI_MODEL || 'gemini-1.5-flash';
+  const model = process.env.GEMINI_MODEL || 'gemini-3.8-flash';
   try {
     const response = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,
@@ -78,7 +78,7 @@ module.exports = async function gemini(req, res) {
           contents: [{ parts: [{ text: body.prompt }] }],
           generationConfig: { maxOutputTokens: 700, temperature: 0.3 },
         }),
-        signal: AbortSignal.timeout(30_000),
+        signal: AbortSignal.timeout(120_000),
       },
     );
 

@@ -19,7 +19,7 @@ function loadEnv() {
 loadEnv();
 
 const port = Number(process.env.PORT || 3000);
-const model = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
+const model = process.env.GEMINI_MODEL || 'gemini-3.8-flash';
 const maxBodyBytes = 32 * 1024;
 
 function sendJson(res, status, body) {
@@ -57,7 +57,8 @@ async function handleGemini(req, res) {
     return sendJson(res, 405, { error: 'Use POST for Gemini requests.' });
   }
 
-  if (!process.env.GEMINI_API_KEY) {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) {
     return sendJson(res, 503, { error: 'GEMINI_API_KEY is not configured in .env.' });
   }
 
@@ -79,13 +80,13 @@ async function handleGemini(req, res) {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-goog-api-key': process.env.GEMINI_API_KEY,
+          'x-goog-api-key': apiKey,
         },
         body: JSON.stringify({
           contents: [{ parts: [{ text: body.prompt }] }],
           generationConfig: { maxOutputTokens: 700, temperature: 0.3 },
         }),
-        signal: AbortSignal.timeout(30_000),
+        signal: AbortSignal.timeout(120_000),
       },
     );
 
