@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="utf-8">
   <title>BidLens AI – Know before you bid</title>
@@ -11,7 +12,9 @@
   <!-- Google Fonts Preconnect for optimal font loading performance -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@500;700;800&family=Figtree:wght@400;500;600&display=swap" rel="stylesheet">
+  <link
+    href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@500;700;800&family=Figtree:wght@400;500;600&display=swap"
+    rel="stylesheet">
 
   <style>
     /* ==========================================================================
@@ -164,11 +167,13 @@
     }
 
     @keyframes wv {
+
       0%,
       55%,
       100% {
         translate: 0 0;
       }
+
       25% {
         translate: 0 -8px;
       }
@@ -405,7 +410,7 @@
       align-items: center;
     }
 
-    .tc > div:nth-child(2) {
+    .tc>div:nth-child(2) {
       flex: 1;
     }
 
@@ -598,7 +603,7 @@
       grid-template-rows: 1fr;
     }
 
-    .fa > div {
+    .fa>div {
       overflow: hidden;
     }
 
@@ -650,7 +655,7 @@
       z-index: 30;
     }
 
-    .chatb > button {
+    .chatb>button {
       width: 58px;
       height: 58px;
       border-radius: 50%;
@@ -769,6 +774,7 @@
        10. ACCESSIBILITY / PREFERS-REDUCED-MOTION
        ========================================================================== */
     @media (prefers-reduced-motion: reduce) {
+
       *,
       *::before,
       *::after {
@@ -783,6 +789,7 @@
     }
   </style>
 </head>
+
 <body>
   <!-- Root Container for React App -->
   <div id="root"></div>
@@ -791,9 +798,68 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.3.1/umd/react.production.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.3.1/umd/react-dom.production.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
   <script>
     'use strict';
+
+    /* ==========================================================================
+       SUPABASE INITIALIZATION
+       ========================================================================== */
+    const SUPABASE_URL = 'https://xiglhcdrqttbgrhmxuce.supabase.co';
+    const SUPABASE_ANON_KEY = 'sb_publishable_bQa5Oc088JGhciW368BdXA_xHYRevqx'; // Replace with your actual publishable key
+    const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+    // Temporary non-destructive Supabase connection test
+    (async function testSupabaseConnection() {
+      try {
+        const { data, error } = await supabaseClient
+          .from('tenders')
+          .select('id')
+          .limit(1);
+
+        if (error) {
+          console.error('[Supabase Connection Test] Error querying tenders table:', error);
+        } else {
+          console.log('[Supabase Connection Test] Query succeeded. Result:', data);
+        }
+      } catch (err) {
+        console.error('[Supabase Connection Test] Unexpected error during connection test:', err);
+      }
+    })();
+
+    /* ==========================================================================
+   STEP 8: LIVE SUPABASE DATA HOOKS
+   ========================================================================== */
+
+    // Fetch the logged-in user's company profile from PostgreSQL
+    async function fetchUserCompany(userId) {
+      const { data, error } = await supabaseClient
+        .from('companies')
+        .select('*')
+        .eq('user_id', userId)
+        .single();
+
+      if (error) {
+        console.error('Error fetching company:', error.message);
+        return null;
+      }
+      return data;
+    }
+
+    // Fetch active tenders from your Supabase tenders table
+    async function fetchActiveTenders() {
+      const { data, error } = await supabaseClient
+        .from('tenders')
+        .select('*')
+        .eq('is_active', true);
+
+      if (error) {
+        console.error('Error fetching tenders:', error.message);
+        return [];
+      }
+      return data;
+    }
 
     /* ==========================================================================
        CORE ALIASES & UTILITY FUNCTIONS
@@ -1008,10 +1074,6 @@
     /* ==========================================================================
        RULE ENGINE & SCORING LOGIC
        ========================================================================== */
-    /**
-     * Evaluates a company against tender eligibility criteria.
-     * Returns a checklist of scored items with labels, weights, status, details, and fixes.
-     */
     function evaluateTender(company, tender) {
       const isAdjacentSector = company.sector !== tender.sector && (company.sector !== 'mach' && tender.sector !== 'mach');
       const createItem = (label, status, weight, fix, detail) => ({
@@ -1078,9 +1140,6 @@
     }
     const evalT = evaluateTender; // Backward compatibility alias
 
-    /**
-     * Calculates percentage score (0-100) based on checklist weights and statuses.
-     */
     function calculateScore(checklist) {
       const totalWeight = checklist.reduce((sum, item) => sum + item.w, 0);
       const earnedWeight = checklist.reduce((sum, item) => sum + item.w * item.s, 0);
@@ -1088,9 +1147,6 @@
     }
     const score = calculateScore; // Backward compatibility alias
 
-    /**
-     * Maps score to design token CSS variable for color-coding.
-     */
     function getScoreColor(val) {
       if (val >= 75) return 'var(--ok)';
       if (val >= 50) return 'var(--sa)';
@@ -1100,9 +1156,6 @@
 
     const pill = (status) => 'tag ' + (status === 'Ready' ? 'p' : status === 'Needs check' ? 'r' : 'g');
 
-    /**
-     * Standard documents list for a company.
-     */
     function getCompanyDocuments(company) {
       return [
         { n: 'Udyam registration', st: 'Valid' },
@@ -1135,7 +1188,7 @@
       } catch {
         const endpoint = new URL('/api/gemini', window.location.href);
         throw new Error(
-          `API endpoint ${endpoint.origin}/api/gemini returned HTTP ${response.status} with ${response.headers.get('content-type') || 'unknown content type'}, not JSON. Open the URL printed by Open BidLens.bat; do not use Live Preview.`
+          `API endpoint ${endpoint.origin}/api/gemini returned HTTP ${response.status} with unexpected content type, not JSON.`
         );
       }
 
@@ -1154,10 +1207,6 @@
     /* ==========================================================================
        UI COMPONENTS
        ========================================================================== */
-
-    /**
-     * Circular animated score ring.
-     */
     function Ring({ v }) {
       const [renderedValue, setRenderedValue] = useState(0);
 
@@ -1186,9 +1235,6 @@
       );
     }
 
-    /**
-     * Card with 3D perspective tilt effect on mouse hover.
-     */
     function Tilt({ children, className = '', ...props }) {
       const cardRef = useRef(null);
 
@@ -1215,9 +1261,6 @@
       }, children);
     }
 
-    /**
-     * Three.js Interactive 3D Background Canvas in Hero.
-     */
     function Scene({ th }) {
       const canvasRef = useRef(null);
 
@@ -1241,7 +1284,6 @@
         scene.add(group);
         group.position.x = 2.4;
 
-        // Mesh Geometries and Materials
         const geoIcosa = new THREE.IcosahedronGeometry(2, 1);
         const matIcosa = new THREE.MeshBasicMaterial({
           color: isLight ? 0x0f766e : 0x2dd4bf,
@@ -1262,7 +1304,6 @@
 
         group.add(meshA, meshB, meshRing);
 
-        // Particle System
         const particleGeo = new THREE.BufferGeometry();
         const points = [];
         for (let idx = 0; idx < 500; idx++) {
@@ -1280,7 +1321,6 @@
         const particleSystem = new THREE.Points(particleGeo, particleMat);
         scene.add(particleSystem);
 
-        // Mouse Parallax
         let mouseX = 0;
         let mouseY = 0;
         let animationFrameId;
@@ -1323,8 +1363,6 @@
           cancelAnimationFrame(animationFrameId);
           window.removeEventListener('mousemove', onMouseMove);
           window.removeEventListener('resize', onResize);
-
-          // Clean up GPU memory
           geoIcosa.dispose();
           matIcosa.dispose();
           geoOcta.dispose();
@@ -1340,9 +1378,6 @@
       return h('canvas', { key: th, ref: canvasRef, 'aria-hidden': true });
     }
 
-    /**
-     * Eased counter animation triggered upon scrolling into view.
-     */
     function Count({ to, suf = '' }) {
       const [currentVal, setCurrentVal] = useState(0);
       const elementRef = useRef(null);
@@ -1378,9 +1413,6 @@
       return h('div', { className: 'big', ref: elementRef }, currentVal + suf);
     }
 
-    /**
-     * Hero Header Component with interactive typewriter and 3D scene.
-     */
     function Hero({ go, user, login, th }) {
       const phrases = [
         'Check eligibility in minutes',
@@ -1435,9 +1467,6 @@
       );
     }
 
-    /**
-     * Brand wordmark with individually animated bouncing letters.
-     */
     const Brand = () =>
       h('span', { 'aria-label': 'BidLens AI' },
         [...'BidLens AI'].map((char, index) =>
@@ -1473,9 +1502,6 @@
         )
       );
 
-    /**
-     * Core Product Capabilities, FAQ, and Interactive Sample Matching.
-     */
     function More({ go }) {
       const [selectedRequirementIndex, setSelectedRequirementIndex] = useState(0);
       const [openFaqIndex, setOpenFaqIndex] = useState(0);
@@ -1588,9 +1614,6 @@
       );
     }
 
-    /**
-     * Home Landing Page.
-     */
     function Home({ go }) {
       return h('main', null,
         h(Wordmark),
@@ -1631,9 +1654,6 @@
       );
     }
 
-    /**
-     * Shared Company Picker dropdown.
-     */
     function CompanyPicker({ c, setC }) {
       return h('select', {
         value: c.id,
@@ -1643,11 +1663,8 @@
         COMPANIES.map((company) => h('option', { key: company.id, value: company.id }, company.name))
       );
     }
-    const CoPick = CompanyPicker; // Backward compatibility alias
+    const CoPick = CompanyPicker;
 
-    /**
-     * Tender Browse & Score Listing Page.
-     */
     function Tenders({ c, setC, go, setT }) {
       return h('main', null,
         h('h2', null, 'Government tenders'),
@@ -1685,9 +1702,6 @@
       );
     }
 
-    /**
-     * Interactive Eligibility Checker with Gemini AI Assistance.
-     */
     function Eligibility({ c, setC, t, setT }) {
       const checklist = evaluateTender(c, t);
       const currentScore = calculateScore(checklist);
@@ -1712,7 +1726,7 @@
         } catch (error) {
           setGeminiResult({
             s: currentScore,
-            tx: `${error.message} The local rule-engine score remains ${currentScore}. Open BidLens with Open BidLens.bat; do not use VS Code Live Preview for Gemini requests.`,
+            tx: `${error.message} The local rule-engine score remains ${currentScore}.`,
             ok: 0,
           });
         } finally {
@@ -1774,21 +1788,18 @@
         ),
         fixes.length
           ? fixes
-              .sort((a, b) => calculateGain(b) - calculateGain(a))
-              .map((item, idx) =>
-                h('div', { className: 'fix', key: idx },
-                  h('b', null, item.l + ' (+' + calculateGain(item) + ' pts)'),
-                  h('div', { className: 'm' }, item.fix)
-                )
+            .sort((a, b) => calculateGain(b) - calculateGain(a))
+            .map((item, idx) =>
+              h('div', { className: 'fix', key: idx },
+                h('b', null, item.l + ' (+' + calculateGain(item) + ' pts)'),
+                h('div', { className: 'm' }, item.fix)
               )
+            )
           : h('p', { className: 'm' }, 'You meet every check for this tender. Confirm details in the tender document before bidding.')
       );
     }
-    const Elig = Eligibility; // Backward compatibility alias
+    const Elig = Eligibility;
 
-    /**
-     * Dashboard Page with company overview, metrics and ranked tender matches.
-     */
     function Dashboard({ c, setC, go, setT }) {
       const rankedTenders = TENDERS
         .map((tender) => ({ tender, score: calculateScore(evaluateTender(c, tender)) }))
@@ -1834,11 +1845,8 @@
         )
       );
     }
-    const Dash = Dashboard; // Backward compatibility alias
+    const Dash = Dashboard;
 
-    /**
-     * Company Profile Detail Page.
-     */
     function Profile({ c, setC }) {
       const profileFields = [
         ['Legal name', c.name],
@@ -1873,9 +1881,6 @@
       );
     }
 
-    /**
-     * Document Vault Page with simulated uploads.
-     */
     function Vault({ c, setC }) {
       const [customUploads, setCustomUploads] = useState([]);
 
@@ -1916,9 +1921,6 @@
       );
     }
 
-    /**
-     * Floating Chat Assistant with Gemini integration and offline rule fallback.
-     */
     function Chat({ c }) {
       const [isOpen, setIsOpen] = useState(false);
       const [messages, setMessages] = useState([
@@ -1978,24 +1980,24 @@
 
       return h('div', { className: 'chatb' },
         isOpen &&
-          h('div', { className: 'cp' },
-            h('header', null, 'BidLens Assistant'),
-            h('div', { className: 'msgs', ref: messageContainerRef },
-              messages.map((msg, idx) =>
-                h('div', { key: idx, className: 'b ' + msg.r }, msg.t)
-              )
-            ),
-            h('form', { onSubmit: handleSendMessage },
-              h('input', {
-                type: 'text',
-                value: inputQuery,
-                onChange: (event) => setInputQuery(event.target.value),
-                placeholder: 'Ask about tenders…',
-                'aria-label': 'Message',
-              }),
-              h('button', { className: 'btn' }, 'Send')
+        h('div', { className: 'cp' },
+          h('header', null, 'BidLens Assistant'),
+          h('div', { className: 'msgs', ref: messageContainerRef },
+            messages.map((msg, idx) =>
+              h('div', { key: idx, className: 'b ' + msg.r }, msg.t)
             )
           ),
+          h('form', { onSubmit: handleSendMessage },
+            h('input', {
+              type: 'text',
+              value: inputQuery,
+              onChange: (event) => setInputQuery(event.target.value),
+              placeholder: 'Ask about tenders…',
+              'aria-label': 'Message',
+            }),
+            h('button', { className: 'btn' }, 'Send')
+          )
+        ),
         h('button', {
           onClick: () => setIsOpen(!isOpen),
           'aria-label': 'Chat',
@@ -2003,9 +2005,6 @@
       );
     }
 
-    /**
-     * Footer Component with Government Portals, Helplines and Disclaimers.
-     */
     function Footer() {
       const renderLink = (url, label) => h('a', { href: url, target: '_blank', rel: 'noopener' }, label);
 
@@ -2044,11 +2043,8 @@
         h('small', null, 'Demo data only. BidLens AI is decision-support software and does not provide legal advice or guarantee tender eligibility, acceptance or award. Verify every requirement in the official tender document and corrigenda.')
       );
     }
-    const Foot = Footer; // Backward compatibility alias
+    const Foot = Footer;
 
-    /* ==========================================================================
-       MAIN ROOT APPLICATION COMPONENT
-       ========================================================================== */
     function App() {
       const [theme, setTheme] = useState(() =>
         window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
@@ -2064,6 +2060,25 @@
         document.documentElement.dataset.theme = theme;
       }, [theme]);
 
+      // Check Supabase session on load
+      useEffect(() => {
+        supabaseClient.auth.getSession().then(({ data: { session } }) => {
+          if (session?.user) {
+            setCurrentUser(session.user.email);
+          }
+        });
+
+        const { data: { subscription } } = supabaseClient.auth.onAuthStateChange((_event, session) => {
+          if (session?.user) {
+            setCurrentUser(session.user.email);
+          } else {
+            setCurrentUser(null);
+          }
+        });
+
+        return () => subscription.unsubscribe();
+      }, []);
+
       const navigateTo = (pageKey) => {
         if (['dash', 'profile', 'vault'].includes(pageKey) && !currentUser) {
           setShowLoginModal(true);
@@ -2071,6 +2086,18 @@
         }
         setCurrentPage(pageKey);
         window.scrollTo(0, 0);
+      };
+
+      const handleGoogleSignIn = async () => {
+        const { error } = await supabaseClient.auth.signInWithOAuth({
+          provider: 'google',
+          options: {
+            redirectTo: window.location.origin
+          }
+        });
+        if (error) {
+          alert('Error signing in with Google: ' + error.message);
+        }
       };
 
       const navItems = [
@@ -2103,8 +2130,9 @@
           h('button', {
             className: 'btn',
             style: { padding: '8px 16px' },
-            onClick: () => {
+            onClick: async () => {
               if (currentUser) {
+                await supabaseClient.auth.signOut();
                 setCurrentUser(null);
                 setCurrentPage('home');
               } else {
@@ -2114,92 +2142,96 @@
           }, currentUser ? 'Sign out' : 'Sign in')
         ),
 
-        // Page Router
         currentPage === 'home' &&
-          h('div', null,
-            h(Hero, {
-              go: navigateTo,
-              th: theme,
-              user: currentUser,
-              login: () => setShowLoginModal(true),
-            }),
-            h(Home, { go: navigateTo })
-          ),
+        h('div', null,
+          h(Hero, {
+            go: navigateTo,
+            th: theme,
+            user: currentUser,
+            login: () => setShowLoginModal(true),
+          }),
+          h(Home, { go: navigateTo })
+        ),
 
         currentPage === 'tenders' &&
-          h(Tenders, {
-            c: currentCompany,
-            setC: setCurrentCompany,
-            go: navigateTo,
-            setT: setCurrentTender,
-          }),
+        h(Tenders, {
+          c: currentCompany,
+          setC: setCurrentCompany,
+          go: navigateTo,
+          setT: setCurrentTender,
+        }),
 
         currentPage === 'elig' &&
-          h(Eligibility, {
-            c: currentCompany,
-            setC: setCurrentCompany,
-            t: currentTender,
-            setT: setCurrentTender,
-          }),
+        h(Eligibility, {
+          c: currentCompany,
+          setC: setCurrentCompany,
+          t: currentTender,
+          setT: setCurrentTender,
+        }),
 
         currentPage === 'dash' &&
-          h(Dashboard, {
-            c: currentCompany,
-            setC: setCurrentCompany,
-            go: navigateTo,
-            setT: setCurrentTender,
-          }),
+        h(Dashboard, {
+          c: currentCompany,
+          setC: setCurrentCompany,
+          go: navigateTo,
+          setT: setCurrentTender,
+        }),
 
         currentPage === 'profile' &&
-          h(Profile, {
-            c: currentCompany,
-            setC: setCurrentCompany,
-          }),
+        h(Profile, {
+          c: currentCompany,
+          setC: setCurrentCompany,
+        }),
 
         currentPage === 'vault' &&
-          h(Vault, {
-            c: currentCompany,
-            setC: setCurrentCompany,
-          }),
+        h(Vault, {
+          c: currentCompany,
+          setC: setCurrentCompany,
+        }),
 
         h(Footer),
         h(Chat, { c: currentCompany }),
 
-        // MSME Sign-In Modal Dialog
         showLoginModal &&
-          h('div', { className: 'modal', onClick: () => setShowLoginModal(false) },
-            h('div', { className: 'card', onClick: (event) => event.stopPropagation() },
-              h('h3', null, 'MSME sign in'),
-              h('p', { className: 'm' }, 'Demo sign in: any email and password works.'),
-              h('input', {
-                type: 'email',
-                placeholder: 'Email',
-                value: loginEmail,
-                onChange: (event) => setLoginEmail(event.target.value),
-                'aria-label': 'Email',
-              }),
-              h('input', {
-                type: 'password',
-                placeholder: 'Password',
-                'aria-label': 'Password',
-              }),
-              h(CompanyPicker, { c: currentCompany, setC: setCurrentCompany }),
-              h('button', {
-                className: 'btn',
-                style: { width: '100%' },
-                onClick: () => {
-                  setCurrentUser(loginEmail || 'msme@demo');
-                  setShowLoginModal(false);
-                  setCurrentPage('dash');
-                },
-              }, 'Sign in')
-            )
+        h('div', { className: 'modal', onClick: () => setShowLoginModal(false) },
+          h('div', { className: 'card', onClick: (event) => event.stopPropagation() },
+            h('h3', null, 'MSME sign in'),
+            h('p', { className: 'm' }, 'Securely sign in via Google OAuth or use demo mode.'),
+            h('button', {
+              className: 'btn',
+              style: { width: '100%', marginBottom: '12px', background: '#db4437' },
+              onClick: handleGoogleSignIn,
+            }, 'Sign in with Google'),
+            h('div', { style: { textAlign: 'center', margin: '8px 0', color: 'var(--mu)', fontSize: '13px' } }, '— or demo sign in —'),
+            h('input', {
+              type: 'email',
+              placeholder: 'Email',
+              value: loginEmail,
+              onChange: (event) => setLoginEmail(event.target.value),
+              'aria-label': 'Email',
+            }),
+            h('input', {
+              type: 'password',
+              placeholder: 'Password',
+              'aria-label': 'Password',
+            }),
+            h(CompanyPicker, { c: currentCompany, setC: setCurrentCompany }),
+            h('button', {
+              className: 'btn',
+              style: { width: '100%', marginTop: '8px' },
+              onClick: () => {
+                setCurrentUser(loginEmail || 'msme@demo');
+                setShowLoginModal(false);
+                setCurrentPage('dash');
+              },
+            }, 'Demo Sign In')
           )
+        )
       );
     }
 
-    // Mount Application to DOM
     ReactDOM.createRoot(document.getElementById('root')).render(h(App));
   </script>
 </body>
+
 </html>
