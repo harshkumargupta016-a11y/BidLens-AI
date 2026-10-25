@@ -20,6 +20,12 @@
 import * as fs from 'fs';
 import * as path from 'path';
 
+// Ambient global declarations for seamless TypeScript editor compatibility without @types/node
+declare const require: any;
+declare const module: any;
+declare const process: any;
+declare const __dirname: string;
+
 // Auto-load .env without requiring external dotenv package
 function loadEnv(): void {
   const candidateEnvPaths = [
@@ -551,7 +557,7 @@ export async function seedDatabase(dataset: NormalizedDataset): Promise<void> {
 // -----------------------------------------------------------------------------
 // CLI Main Execution
 // -----------------------------------------------------------------------------
-async function main(): Promise<void> {
+export async function main(): Promise<void> {
   console.log(`🚀 Starting BidLens AI 60 MSME Company Dataset Normalizer & Seeder...`);
 
   const candidatePaths = [
@@ -561,7 +567,7 @@ async function main(): Promise<void> {
   ];
 
   let csvPath = candidatePaths.find(p => fs.existsSync(p));
-  const customArg = process.argv.find(a => a.startsWith('--csv-path='));
+  const customArg = process.argv.find((a: string) => a.startsWith('--csv-path='));
   if (customArg) {
     csvPath = path.resolve(customArg.split('=')[1]);
   }
@@ -599,10 +605,19 @@ async function main(): Promise<void> {
   console.log(`\n🎉 Process completed successfully!`);
 }
 
-// Support both CommonJS and ES Modules entrypoints
-if (typeof require !== 'undefined' && require.main === module) {
-  main().catch(err => {
+// Universal entrypoint check supporting CommonJS (node), ESM (tsx/ts-node), and bundlers
+const isDirectExecution =
+  (typeof require !== 'undefined' && typeof module !== 'undefined' && require.main === module) ||
+  (typeof process !== 'undefined' && Array.isArray(process.argv) && process.argv.length > 1 && (
+    (process.argv[1] || '').endsWith('seed-msmes.ts') || 
+    (process.argv[1] || '').endsWith('seed-msmes.js')
+  ));
+
+if (isDirectExecution) {
+  main().catch((err: any) => {
     console.error(`Fatal error:`, err);
-    process.exit(1);
+    if (typeof process !== 'undefined' && process.exit) {
+      process.exit(1);
+    }
   });
 }

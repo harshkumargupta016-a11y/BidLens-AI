@@ -463,7 +463,14 @@ async function main() {
   console.log(`\n🎉 Process completed successfully!`);
 }
 
-if (typeof require !== 'undefined' && require.main === module) {
+const isDirectExecution =
+  (typeof require !== 'undefined' && typeof module !== 'undefined' && require.main === module) ||
+  (typeof process !== 'undefined' && Array.isArray(process.argv) && process.argv.length > 1 && (
+    (process.argv[1] || '').endsWith('seed-msmes.js') ||
+    (process.argv[1] || '').endsWith('seed-msmes.ts')
+  ));
+
+if (isDirectExecution) {
   main().catch(err => {
     console.error(`Fatal error:`, err);
     process.exit(1);
