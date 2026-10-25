@@ -19,8 +19,8 @@ function loadEnv() {
 loadEnv();
 
 const port = Number(process.env.PORT || 3000);
-const model = process.env.GEMINI_MODEL || 'gemini-3.5-flash';
-const maxBodyBytes = 32 * 1024;
+const model = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
+const maxBodyBytes = 256 * 1024;
 
 function sendJson(res, status, body) {
   res.writeHead(status, {
