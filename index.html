@@ -888,6 +888,21 @@
             color: var(--ok);
         }
 
+        .stepper-clickable .stepper-step {
+            cursor: pointer;
+            user-select: none;
+            transition: transform 0.15s ease, opacity 0.15s ease;
+        }
+
+        .stepper-clickable .stepper-step:hover {
+            transform: translateY(-2px);
+            opacity: 0.9;
+        }
+
+        .stepper-clickable .stepper-step:active {
+            transform: translateY(0);
+        }
+
         /* ==========================================================================
        9. ACKNOWLEDGEMENT SLIP (PRINTABLE)
        ========================================================================== */
@@ -3098,20 +3113,34 @@ ${hasExpiredIso ? '1. Renew ISO 9001:2015 certificate via an accredited certific
                                         h('b', { style: { fontSize: 16, marginLeft: 6 } }, comp.category),
                                         h('div', { className: 'm', style: { marginTop: 4 } }, `Tender: ${comp.tenderId} • Filed by ${comp.complainant} on ${comp.date}`)
                                     ),
-                                    h('span', { className: 'tag p', style: { fontWeight: 700 } }, comp.status)
+                                    comp.status === 'Under Review' ? (
+                                        h('span', {
+                                            className: 'tag',
+                                            style: { background: '#0284c7', color: '#fff', fontWeight: 800, padding: '4px 12px', borderRadius: 20 }
+                                        }, '🔍 Under Review')
+                                    ) : comp.status === 'Resolved' ? (
+                                        h('span', {
+                                            className: 'tag',
+                                            style: { background: '#16a34a', color: '#fff', fontWeight: 800, padding: '4px 12px', borderRadius: 20 }
+                                        }, '✓ Resolved')
+                                    ) : (
+                                        h('span', { className: 'tag p', style: { fontWeight: 700 } }, comp.status)
+                                    )
                                 ),
 
                                 // 4-Step Visual Tracker
                                 h('div', { className: 'stepper' },
-                                    ['Submitted', 'Under Review', 'Investigation', 'Resolved'].map((stName, idx) =>
-                                        h('div', {
+                                    ['Submitted', 'Under Review', 'Investigation', 'Resolved'].map((stName, idx) => {
+                                        const isCompleted = idx < currentStep || comp.status === 'Resolved';
+                                        const isActive = idx === currentStep;
+                                        return h('div', {
                                             key: idx,
-                                            className: `stepper-step ${idx === currentStep ? 'active' : ''} ${idx < currentStep ? 'completed' : ''}`
+                                            className: `stepper-step ${isActive ? 'active' : ''} ${isCompleted ? 'completed' : ''}`
                                         },
-                                            h('div', { className: 'stepper-circle' }, idx < currentStep ? '✓' : idx + 1),
+                                            h('div', { className: 'stepper-circle' }, isCompleted ? '✓' : idx + 1),
                                             h('span', null, stName)
-                                        )
-                                    )
+                                        );
+                                    })
                                 ),
 
                                 h('p', { style: { fontSize: 14, margin: '10px 0' } }, comp.description),
@@ -3120,14 +3149,16 @@ ${hasExpiredIso ? '1. Renew ISO 9001:2015 certificate via an accredited certific
                                 comp.adminRemarks &&
                                 h('div', {
                                     style: {
-                                        background: 'var(--bg)',
-                                        borderLeft: '4px solid var(--ac)',
-                                        padding: '8px 14px',
+                                        background: comp.status === 'Resolved' ? '#16a34a15' : comp.status === 'Under Review' ? '#0284c715' : 'var(--bg)',
+                                        borderLeft: `4px solid ${comp.status === 'Resolved' ? '#16a34a' : comp.status === 'Under Review' ? '#0284c7' : 'var(--ac)'}`,
+                                        padding: '10px 14px',
                                         borderRadius: '0 8px 8px 0',
                                         fontSize: 13
                                     }
                                 },
-                                    h('b', null, '🏛️ Authority Note: '),
+                                    h('b', { style: { color: comp.status === 'Resolved' ? '#16a34a' : comp.status === 'Under Review' ? '#0284c7' : 'var(--ac)' } },
+                                        comp.status === 'Resolved' ? '🏛️ Official Resolution Directive: ' : comp.status === 'Under Review' ? '🏛️ Under Review Status Note: ' : '🏛️ Authority Note: '
+                                    ),
                                     comp.adminRemarks
                                 )
                             );
@@ -3425,10 +3456,33 @@ ${hasExpiredIso ? '1. Renew ISO 9001:2015 certificate via an accredited certific
             const [editingId, setEditingId] = useState(null);
             const [remarkText, setRemarkText] = useState('');
             const [statusFilter, setStatusFilter] = useState('All');
+            const [toastMsg, setToastMsg] = useState('');
 
             const filteredComplaints = statusFilter === 'All'
                 ? complaints
                 : complaints.filter(c => c.status === statusFilter);
+
+            const getStepIndex = (status) => {
+                if (status === 'Submitted') return 0;
+                if (status === 'Under Review') return 1;
+                if (status === 'Investigation') return 2;
+                if (status === 'Resolved' || status === 'Escalated') return 3;
+                return 0;
+            };
+
+            const steps = ['Submitted', 'Under Review', 'Investigation', 'Resolved'];
+
+            const handleSetTrack = (comp, newStatus) => {
+                const updates = { status: newStatus };
+                if (newStatus === 'Under Review' && (!comp.adminRemarks || comp.adminRemarks.includes('Awaiting'))) {
+                    updates.adminRemarks = 'Official dispute review active under GFR 153. Tender Scrutiny Committee is examining contested clauses.';
+                } else if (newStatus === 'Resolved' && (!comp.adminRemarks || comp.adminRemarks.includes('Awaiting') || comp.adminRemarks.includes('underway') || comp.adminRemarks.includes('review'))) {
+                    updates.adminRemarks = 'Dispute formally resolved under GFR 153. Corrigendum issued / clause clarification published on public procurement portal.';
+                }
+                onUpdateComplaint(comp.id, updates);
+                setToastMsg(`Dispute ${comp.id} track changed to "${newStatus}". Live updated on Bidder Dashboard.`);
+                setTimeout(() => setToastMsg(''), 5000);
+            };
 
             const handleSaveRemark = (comp) => {
                 onUpdateComplaint(comp.id, {
@@ -3436,14 +3490,43 @@ ${hasExpiredIso ? '1. Renew ISO 9001:2015 certificate via an accredited certific
                 });
                 setEditingId(null);
                 setRemarkText('');
+                setToastMsg(`Administrative remarks for ${comp.id} saved and synced with Bidder Dashboard.`);
+                setTimeout(() => setToastMsg(''), 5000);
             };
 
             return h('main', null,
-                h('h2', null, 'Administrative Grievance & Dispute Desk'),
-                h('p', { className: 'sub' }, 'Review vendor challenges to tender specifications, adjudicate dispute filings, and issue binding resolutions.'),
+                h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12, marginBottom: 8 } },
+                    h('div', null,
+                        h('h2', { style: { margin: 0 } }, 'Administrative Grievance & Dispute Desk'),
+                        h('p', { className: 'sub', style: { margin: '4px 0 0 0' } }, 'Review vendor challenges to tender specifications, adjudicate dispute filings, and issue binding resolutions.')
+                    ),
+                    h('div', { className: 'tag p', style: { display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 12px', fontSize: 12, borderRadius: 20 } },
+                        h('span', { style: { width: 8, height: 8, borderRadius: '50%', background: '#10b981' } }),
+                        '⚡ Live Synced with Bidder Portal'
+                    )
+                ),
 
-                h('div', { style: { display: 'flex', gap: 10, alignItems: 'center', marginBottom: 16 } },
-                    h('span', { className: 'm' }, 'Filter by Status:'),
+                // Live Toast Banner
+                toastMsg && h('div', {
+                    style: {
+                        background: 'color-mix(in srgb, var(--ac) 15%, var(--sf))',
+                        border: '1px solid var(--ac)',
+                        borderRadius: 10,
+                        padding: '10px 16px',
+                        marginBottom: 16,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        fontWeight: 600,
+                        fontSize: 13.5
+                    }
+                },
+                    h('span', null, `🔔 ${toastMsg}`),
+                    h('button', { className: 'btn sm g', style: { padding: '2px 8px', fontSize: 11 }, onClick: () => setToastMsg('') }, '✕')
+                ),
+
+                h('div', { style: { display: 'flex', gap: 10, alignItems: 'center', marginBottom: 16, flexWrap: 'wrap' } },
+                    h('span', { className: 'm', style: { fontWeight: 600 } }, 'Filter by Status:'),
                     ['All', 'Submitted', 'Under Review', 'Investigation', 'Resolved'].map(st =>
                         h('button', {
                             key: st,
@@ -3454,57 +3537,148 @@ ${hasExpiredIso ? '1. Renew ISO 9001:2015 certificate via an accredited certific
                 ),
 
                 h('div', { style: { display: 'grid', gap: 16 } },
-                    filteredComplaints.map(comp =>
-                        h('div', { className: 'card', key: comp.id },
+                    filteredComplaints.map(comp => {
+                        const currentStep = getStepIndex(comp.status);
+                        const isUnderReview = comp.status === 'Under Review';
+                        const isResolved = comp.status === 'Resolved';
+
+                        return h('div', {
+                            className: 'card',
+                            key: comp.id,
+                            style: {
+                                borderLeft: isResolved ? '5px solid #16a34a' : isUnderReview ? '5px solid #0284c7' : '5px solid var(--ln)'
+                            }
+                        },
                             h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 8 } },
                                 h('div', null,
-                                    h('span', { className: 'tag ' + (comp.urgency === 'Critical' ? 'f' : comp.urgency === 'High' ? 'r' : 'g') }, comp.urgency),
-                                    h('b', { style: { fontSize: 16, marginLeft: 6 } }, comp.category),
-                                    h('div', { className: 'm', style: { marginTop: 4 } },
-                                        `Dispute ID: ${comp.id} • Tender: ${comp.tenderId} • Complainant: ${comp.complainant} (${comp.date})`
+                                    h('div', { style: { display: 'flex', alignItems: 'center', gap: 8 } },
+                                        h('span', { className: 'tag ' + (comp.urgency === 'Critical' ? 'f' : comp.urgency === 'High' ? 'r' : 'g') }, comp.urgency),
+                                        h('b', { style: { fontSize: 16 } }, comp.category),
+                                        h('span', { className: 'm', style: { fontSize: 12.5 } }, `Dispute ID: ${comp.id}`)
+                                    ),
+                                    h('div', { className: 'm', style: { marginTop: 4, fontSize: 13 } },
+                                        `Target Tender: ${comp.tenderId} • Complainant: ${comp.complainant} (${comp.date})`
                                     )
                                 ),
                                 h('div', { style: { display: 'flex', gap: 8, alignItems: 'center' } },
-                                    h('label', { style: { fontSize: 13, color: 'var(--mu)' } }, 'Status:'),
+                                    h('label', { style: { fontSize: 12, fontWeight: 700, color: 'var(--mu)' } }, 'Track Status:'),
                                     h('select', {
                                         value: comp.status,
-                                        style: { margin: 0, padding: '5px 8px', fontSize: 13, width: 'auto' },
-                                        onChange: (e) => onUpdateComplaint(comp.id, { status: e.target.value })
+                                        style: { margin: 0, padding: '5px 10px', fontSize: 13, width: 'auto', fontWeight: 600 },
+                                        onChange: (e) => handleSetTrack(comp, e.target.value)
                                     },
-                                        h('option', { value: 'Submitted' }, 'Submitted'),
-                                        h('option', { value: 'Under Review' }, 'Under Review'),
-                                        h('option', { value: 'Investigation' }, 'Investigation'),
-                                        h('option', { value: 'Resolved' }, 'Resolved'),
-                                        h('option', { value: 'Escalated' }, 'Escalated')
+                                        h('option', { value: 'Submitted' }, '1. Submitted'),
+                                        h('option', { value: 'Under Review' }, '2. Under Review'),
+                                        h('option', { value: 'Investigation' }, '3. Investigation'),
+                                        h('option', { value: 'Resolved' }, '4. Resolved'),
+                                        h('option', { value: 'Escalated' }, '5. Escalated')
                                     )
                                 )
                             ),
 
-                            h('p', { style: { fontSize: 14, margin: '12px 0', background: 'var(--bg)', padding: 12, borderRadius: 8 } },
+                            // Interactive 4-Stage Stepper
+                            h('div', { style: { margin: '14px 0 10px 0' } },
+                                h('div', { className: 'stepper stepper-clickable' },
+                                    steps.map((stName, idx) => {
+                                        const isCompleted = idx < currentStep || isResolved;
+                                        const isActive = idx === currentStep;
+                                        return h('div', {
+                                            key: stName,
+                                            className: `stepper-step ${isActive ? 'active' : ''} ${isCompleted ? 'completed' : ''}`,
+                                            title: `Click to move dispute track to "${stName}"`,
+                                            onClick: () => handleSetTrack(comp, stName)
+                                        },
+                                            h('div', { className: 'stepper-circle' }, isCompleted ? '✓' : idx + 1),
+                                            h('span', { style: { marginTop: 2 } }, stName)
+                                        );
+                                    })
+                                )
+                            ),
+
+                            // 1-Click Track Action Buttons (Under Review & Resolved)
+                            h('div', {
+                                style: {
+                                    display: 'flex',
+                                    gap: 8,
+                                    alignItems: 'center',
+                                    flexWrap: 'wrap',
+                                    margin: '6px 0 12px 0',
+                                    padding: '8px 12px',
+                                    background: 'var(--bg)',
+                                    borderRadius: 8,
+                                    border: '1px solid var(--ln)'
+                                }
+                            },
+                                h('span', { style: { fontSize: 12, fontWeight: 700, color: 'var(--mu)', marginRight: 4 } }, '⚡ Change Track:'),
+                                h('button', {
+                                    className: `btn sm`,
+                                    style: isUnderReview
+                                        ? { background: '#0284c7', borderColor: '#0284c7', color: '#ffffff', fontWeight: 700 }
+                                        : { background: 'transparent', color: '#0284c7', borderColor: '#0284c7', fontWeight: 600 },
+                                    onClick: () => handleSetTrack(comp, 'Under Review')
+                                }, isUnderReview ? '✓ Currently Under Review' : '🔍 Set to Under Review'),
+                                h('button', {
+                                    className: `btn sm`,
+                                    style: isResolved
+                                        ? { background: '#16a34a', borderColor: '#16a34a', color: '#ffffff', fontWeight: 700 }
+                                        : { background: 'transparent', color: '#16a34a', borderColor: '#16a34a', fontWeight: 600 },
+                                    onClick: () => handleSetTrack(comp, 'Resolved')
+                                }, isResolved ? '✓ Marked as Resolved' : '✅ Mark as Resolved'),
+                                comp.status !== 'Submitted' && h('button', {
+                                    className: 'btn sm g',
+                                    style: { padding: '4px 8px', fontSize: 11.5 },
+                                    onClick: () => handleSetTrack(comp, 'Submitted')
+                                }, '↩ Reset to Submitted'),
+                                h('span', { className: 'm', style: { marginLeft: 'auto', fontSize: 11.5 } },
+                                    'Live synced with Bidder Dashboard'
+                                )
+                            ),
+
+                            h('p', { style: { fontSize: 14, margin: '10px 0', background: 'var(--bg)', padding: 12, borderRadius: 8, lineHeight: 1.45 } },
                                 comp.description
                             ),
 
                             editingId === comp.id ? (
-                                h('div', { style: { marginTop: 10 } },
+                                h('div', { style: { marginTop: 10, background: 'var(--sf)', padding: 12, borderRadius: 8, border: '1px solid var(--ac)' } },
+                                    h('label', { style: { fontSize: 12, fontWeight: 700, color: 'var(--ac)', display: 'block', marginBottom: 4 } },
+                                        'Official Administrative Directive & Rulings'
+                                    ),
                                     h('textarea', {
                                         value: remarkText,
-                                        placeholder: 'Enter official administrative findings and directives…',
+                                        placeholder: 'Enter formal findings, committee directives, or corrigendum references…',
                                         onChange: (e) => setRemarkText(e.target.value),
-                                        rows: 2
+                                        rows: 2,
+                                        style: { width: '100%', marginBottom: 8 }
                                     }),
-                                    h('div', { style: { display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 6 } },
+                                    h('div', { style: { display: 'flex', gap: 8, justifyContent: 'flex-end' } },
                                         h('button', { className: 'btn sm g', onClick: () => setEditingId(null) }, 'Cancel'),
-                                        h('button', { className: 'btn sm', onClick: () => handleSaveRemark(comp) }, 'Save Remarks')
+                                        h('button', { className: 'btn sm', onClick: () => handleSaveRemark(comp) }, 'Save Directives')
                                     )
                                 )
                             ) : (
-                                h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 10, flexWrap: 'wrap', gap: 8 } },
-                                    h('div', { style: { fontSize: 13 } },
-                                        h('b', { style: { color: 'var(--ac)' } }, 'Official Remark: '),
+                                h('div', {
+                                    style: {
+                                        display: 'flex',
+                                        justifyContent: 'space-between',
+                                        alignItems: 'center',
+                                        marginTop: 10,
+                                        flexWrap: 'wrap',
+                                        gap: 8,
+                                        padding: '8px 12px',
+                                        background: isResolved ? '#16a34a12' : isUnderReview ? '#0284c712' : 'var(--bg)',
+                                        border: `1px solid ${isResolved ? '#16a34a40' : isUnderReview ? '#0284c740' : 'var(--ln)'}`,
+                                        borderRadius: 8
+                                    }
+                                },
+                                    h('div', { style: { fontSize: 13, flex: 1 } },
+                                        h('b', { style: { color: isResolved ? '#16a34a' : isUnderReview ? '#0284c7' : 'var(--ac)' } },
+                                            isResolved ? '🏛️ Official Resolution Directive: ' : isUnderReview ? '🏛️ Under Review Directive: ' : '🏛️ Official Remark: '
+                                        ),
                                         comp.adminRemarks || 'None appended yet.'
                                     ),
                                     h('button', {
                                         className: 'btn sm o',
+                                        style: { fontSize: 12, padding: '4px 10px' },
                                         onClick: () => {
                                             setEditingId(comp.id);
                                             setRemarkText(comp.adminRemarks || '');
@@ -3512,8 +3686,8 @@ ${hasExpiredIso ? '1. Renew ISO 9001:2015 certificate via an accredited certific
                                     }, '✏️ Update Remarks')
                                 )
                             )
-                        )
-                    )
+                        );
+                    })
                 )
             );
         }
@@ -4138,10 +4312,10 @@ ${hasExpiredIso ? '1. Renew ISO 9001:2015 certificate via an accredited certific
 
                                         // Status Stage Updater
                                         h('div', { style: { display: 'flex', gap: 8, alignItems: 'center' } },
-                                            h('label', { style: { fontSize: 12, fontWeight: 600, color: 'var(--mu)' } }, 'Update Stage:'),
+                                            h('label', { style: { fontSize: 12, fontWeight: 700, color: 'var(--mu)' } }, 'Update Stage:'),
                                             h('select', {
                                                 value: comp.status,
-                                                style: { margin: 0, padding: '5px 10px', fontSize: 13, width: 'auto' },
+                                                style: { margin: 0, padding: '5px 10px', fontSize: 13, width: 'auto', fontWeight: 600 },
                                                 onChange: (e) => onUpdateComplaint(comp.id, { status: e.target.value })
                                             },
                                                 h('option', { value: 'Submitted' }, '1. Submitted'),
@@ -4153,21 +4327,59 @@ ${hasExpiredIso ? '1. Renew ISO 9001:2015 certificate via an accredited certific
                                         )
                                     ),
 
-                                    // 4-Stage Stepper
-                                    h('div', { style: { margin: '14px 0 12px 0' } },
-                                        h('div', { className: 'stepper' },
+                                    // Interactive 4-Stage Stepper
+                                    h('div', { style: { margin: '14px 0 10px 0' } },
+                                        h('div', { className: 'stepper stepper-clickable' },
                                             steps.map((st, sIdx) => {
-                                                const isDone = currentStepIdx >= sIdx;
+                                                const isDone = currentStepIdx > sIdx || comp.status === 'Resolved';
                                                 const isCurr = currentStepIdx === sIdx;
                                                 return h('div', {
                                                     key: st,
-                                                    className: `step ${isDone ? 'done' : ''} ${isCurr ? 'current' : ''}`
+                                                    className: `stepper-step ${isCurr ? 'active' : ''} ${isDone ? 'completed' : ''}`,
+                                                    title: `Click to change status to "${st}"`,
+                                                    onClick: () => onUpdateComplaint(comp.id, { status: st })
                                                 },
-                                                    h('div', { className: 'step-circle' }, isDone ? '✓' : sIdx + 1),
-                                                    h('div', { className: 'step-label' }, st)
+                                                    h('div', { className: 'stepper-circle' }, isDone ? '✓' : sIdx + 1),
+                                                    h('span', null, st)
                                                 );
                                             })
                                         )
+                                    ),
+
+                                    // Quick Track Buttons (Under Review & Resolved)
+                                    h('div', {
+                                        style: {
+                                            display: 'flex',
+                                            gap: 8,
+                                            alignItems: 'center',
+                                            flexWrap: 'wrap',
+                                            margin: '4px 0 10px 0',
+                                            padding: '6px 10px',
+                                            background: 'var(--sf)',
+                                            borderRadius: 8
+                                        }
+                                    },
+                                        h('span', { style: { fontSize: 11.5, fontWeight: 700, color: 'var(--mu)' } }, '⚡ Change Track:'),
+                                        h('button', {
+                                            className: 'btn sm',
+                                            style: comp.status === 'Under Review'
+                                                ? { background: '#0284c7', borderColor: '#0284c7', color: '#fff', fontSize: 12, padding: '3px 8px' }
+                                                : { background: 'transparent', color: '#0284c7', borderColor: '#0284c7', fontSize: 12, padding: '3px 8px' },
+                                            onClick: () => onUpdateComplaint(comp.id, {
+                                                status: 'Under Review',
+                                                adminRemarks: comp.adminRemarks || 'Official dispute review active under GFR 153. Tender Scrutiny Committee is examining contested clauses.'
+                                            })
+                                        }, comp.status === 'Under Review' ? '✓ Currently Under Review' : '🔍 Set to Under Review'),
+                                        h('button', {
+                                            className: 'btn sm',
+                                            style: comp.status === 'Resolved'
+                                                ? { background: '#16a34a', borderColor: '#16a34a', color: '#fff', fontSize: 12, padding: '3px 8px' }
+                                                : { background: 'transparent', color: '#16a34a', borderColor: '#16a34a', fontSize: 12, padding: '3px 8px' },
+                                            onClick: () => onUpdateComplaint(comp.id, {
+                                                status: 'Resolved',
+                                                adminRemarks: comp.adminRemarks || 'Dispute formally resolved under GFR 153. Corrigendum issued / clause clarification published on public procurement portal.'
+                                            })
+                                        }, comp.status === 'Resolved' ? '✓ Marked as Resolved' : '✅ Mark as Resolved')
                                     ),
 
                                     // Complainant Narrative
@@ -5380,7 +5592,154 @@ ${hasExpiredIso ? '1. Renew ISO 9001:2015 certificate via an accredited certific
             );
         }
 
-        function Dashboard({ c, setC, go, setT, companies, tenders, onUpdateCompany }) {
+        /* ==========================================================================
+           BIDDER DASHBOARD: DISPUTE & GRIEVANCE REDRESSAL LIVE TRACKER
+           ========================================================================== */
+        function BidderDisputeTracker({ company, complaints, go }) {
+            const getStepIndex = (status) => {
+                if (status === 'Submitted') return 0;
+                if (status === 'Under Review') return 1;
+                if (status === 'Investigation') return 2;
+                if (status === 'Resolved' || status === 'Escalated') return 3;
+                return 0;
+            };
+
+            const steps = ['Submitted', 'Under Review', 'Investigation', 'Resolved'];
+
+            return h('div', { className: 'card', style: { marginTop: 24, borderTop: '4px solid var(--ac)' } },
+                h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10, marginBottom: 14 } },
+                    h('div', null,
+                        h('h3', { style: { fontSize: 20, margin: 0, display: 'flex', alignItems: 'center', gap: 8 } },
+                            h('span', null, '⚖️'),
+                            'Administrative Grievance & Dispute Redressal Tracker'
+                        ),
+                        h('p', { className: 'm', style: { margin: '4px 0 0 0', fontSize: 13 } },
+                            'Real-time status of your procurement challenges under GFR 153. Updated dynamically by Government Dispute Officers.'
+                        )
+                    ),
+                    h('button', {
+                        className: 'btn sm o',
+                        onClick: () => go('grievances')
+                    }, '📂 Open Grievance Portal →')
+                ),
+
+                complaints.length === 0 ? (
+                    h('div', { style: { padding: '16px 20px', background: 'var(--bg)', borderRadius: 10, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 } },
+                        h('div', null,
+                            h('b', { style: { fontSize: 14, display: 'block', color: 'var(--ok)' } }, '✓ All Tender Filings & Bids in Good Standing'),
+                            h('span', { className: 'm', style: { fontSize: 12.5 } }, `No active disputes registered for ${company.name}. Contested clauses can be appealed at any time.`)
+                        ),
+                        h('button', { className: 'btn sm', onClick: () => go('grievances') }, '⚠️ Lodge a Dispute')
+                    )
+                ) : (
+                    h('div', { style: { display: 'grid', gap: 14 } },
+                        complaints.map(comp => {
+                            const currentStep = getStepIndex(comp.status);
+                            const isResolved = comp.status === 'Resolved';
+                            const isUnderReview = comp.status === 'Under Review';
+
+                            return h('div', {
+                                key: comp.id,
+                                style: {
+                                    background: 'var(--bg)',
+                                    border: isResolved ? '1px solid #16a34a50' : isUnderReview ? '1px solid #0284c750' : '1px solid var(--ln)',
+                                    borderRadius: 12,
+                                    padding: 16
+                                }
+                            },
+                                // Header: category, urgency, status badge
+                                h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 8 } },
+                                    h('div', null,
+                                        h('div', { style: { display: 'flex', alignItems: 'center', gap: 8 } },
+                                            h('span', { className: 'tag ' + (comp.urgency === 'Critical' ? 'f' : comp.urgency === 'High' ? 'r' : 'g') }, comp.urgency),
+                                            h('b', { style: { fontSize: 15 } }, comp.category),
+                                            h('span', { className: 'm', style: { fontSize: 12 } }, `• Dispute ID: ${comp.id}`)
+                                        ),
+                                        h('div', { className: 'm', style: { marginTop: 4, fontSize: 12.5 } },
+                                            `Target Tender: ${comp.tenderId} • Filed: ${comp.date}`
+                                        )
+                                    ),
+                                    // Status Badge
+                                    isUnderReview ? (
+                                        h('span', {
+                                            className: 'tag',
+                                            style: {
+                                                background: '#0284c7',
+                                                color: '#ffffff',
+                                                fontWeight: 800,
+                                                padding: '4px 12px',
+                                                borderRadius: 20,
+                                                boxShadow: '0 0 10px #0284c740',
+                                                display: 'inline-flex',
+                                                alignItems: 'center',
+                                                gap: 6
+                                            }
+                                        },
+                                            h('span', { style: { width: 8, height: 8, borderRadius: '50%', background: '#fff' } }),
+                                            '🔍 Under Review'
+                                        )
+                                    ) : isResolved ? (
+                                        h('span', {
+                                            className: 'tag',
+                                            style: {
+                                                background: '#16a34a',
+                                                color: '#ffffff',
+                                                fontWeight: 800,
+                                                padding: '4px 12px',
+                                                borderRadius: 20,
+                                                boxShadow: '0 0 10px #16a34a40',
+                                                display: 'inline-flex',
+                                                alignItems: 'center',
+                                                gap: 6
+                                            }
+                                        }, '✓ Resolved')
+                                    ) : (
+                                        h('span', { className: 'tag p', style: { fontWeight: 700 } }, comp.status)
+                                    )
+                                ),
+
+                                // 4-Stage Stepper
+                                h('div', { className: 'stepper', style: { margin: '14px 0 12px 0' } },
+                                    steps.map((stName, idx) => {
+                                        const isCompleted = idx < currentStep || isResolved;
+                                        const isActive = idx === currentStep;
+                                        return h('div', {
+                                            key: stName,
+                                            className: `stepper-step ${isActive ? 'active' : ''} ${isCompleted ? 'completed' : ''}`
+                                        },
+                                            h('div', { className: 'stepper-circle' }, isCompleted ? '✓' : idx + 1),
+                                            h('span', null, stName)
+                                        );
+                                    })
+                                ),
+
+                                // Narrative Description
+                                h('p', { style: { fontSize: 13.5, margin: '8px 0', lineHeight: 1.45 } }, comp.description),
+
+                                // Live Authority Directive / Remark Callout
+                                h('div', {
+                                    style: {
+                                        marginTop: 10,
+                                        background: isResolved ? '#16a34a15' : isUnderReview ? '#0284c715' : 'var(--sf)',
+                                        borderLeft: `4px solid ${isResolved ? '#16a34a' : isUnderReview ? '#0284c7' : 'var(--ac)'}`,
+                                        padding: '10px 14px',
+                                        borderRadius: '0 8px 8px 0',
+                                        fontSize: 13
+                                    }
+                                },
+                                    h('b', { style: { color: isResolved ? '#16a34a' : isUnderReview ? '#0284c7' : 'var(--ac)', display: 'block', marginBottom: 2 } },
+                                        isResolved ? '🏛️ Official Resolution Directive (GFR 153):' : isUnderReview ? '🏛️ Administrative Desk Status (Under Review):' : '🏛️ Administrative Desk Remark:'
+                                    ),
+                                    comp.adminRemarks || (isUnderReview ? 'Official investigation active. Review Committee reviewing tender clause discrepancy.' : 'Dispute logged. Awaiting scrutiny officer assignment.')
+                                )
+                            );
+                        })
+                    )
+                )
+            );
+        }
+
+        function Dashboard({ c, setC, go, setT, companies, tenders, complaints = [], onUpdateCompany }) {
             const rankedTenders = tenders
                 .map((tender) => ({ tender, score: calculateScore(evaluateTender(c, tender)) }))
                 .sort((a, b) => b.score - a.score);
@@ -5390,6 +5749,13 @@ ${hasExpiredIso ? '1. Renew ISO 9001:2015 certificate via an accredited certific
             const totalApplied = records.reduce((sum, r) => sum + r.applied, 0);
             const totalReceived = records.reduce((sum, r) => sum + r.received, 0);
             const winRate = totalApplied ? Math.round((totalReceived / totalApplied) * 100) : 0;
+
+            const companyComplaints = (complaints || []).filter(comp =>
+                comp.complainant === c.name ||
+                (comp.complainant && c.name && comp.complainant.toLowerCase().includes(c.name.toLowerCase())) ||
+                (c.name && comp.complainant && c.name.toLowerCase().includes(comp.complainant.toLowerCase()))
+            );
+            const activeDisputesCount = companyComplaints.filter(comp => comp.status !== 'Resolved').length;
 
             return h('main', null,
                 h('h2', null, 'Dashboard'),
@@ -5402,7 +5768,7 @@ ${hasExpiredIso ? '1. Renew ISO 9001:2015 certificate via an accredited certific
                         [c.pc, '% profile complete'],
                         [rankedTenders.filter((item) => item.score >= 70).length, ' tenders scoring 70+'],
                         [attentionDocsCount, ' documents need attention'],
-                        [winRate, '% past tender win rate'],
+                        [activeDisputesCount, ' active disputes / grievances'],
                     ].map(([metricNum, label], idx) =>
                         h(Tilt, { key: idx },
                             h(Count, { to: metricNum }),
@@ -5411,10 +5777,13 @@ ${hasExpiredIso ? '1. Renew ISO 9001:2015 certificate via an accredited certific
                     )
                 ),
 
-                // NEW: Past Tenders Performance Graph (Applied vs Received Tenders)
+                // NEW: Grievance & Dispute Redressal Live Tracker (Bidder Dashboard)
+                h(BidderDisputeTracker, { company: c, complaints: companyComplaints, go }),
+
+                // Past Tenders Performance Graph (Applied vs Received Tenders)
                 h(PastTendersChart, { company: c }),
 
-                // NEW: Profile Completion Breakdown Matrix
+                // Profile Completion Breakdown Matrix
                 h(ProfileCompletionBreakdown, { company: c, go }),
 
                 // Best Matches Section
@@ -6736,7 +7105,13 @@ ${hasExpiredIso ? '1. Renew ISO 9001:2015 certificate via an accredited certific
             const [currentPage, setCurrentPage] = useState('home');
             const [companies, setCompanies] = useState(initialCompanies);
             const [tenders, setTenders] = useState(initialTenders);
-            const [complaints, setComplaints] = useState(initialComplaints);
+            const [complaints, setComplaints] = useState(() => {
+                try {
+                    const stored = localStorage.getItem('bidlens_complaints');
+                    if (stored) return JSON.parse(stored);
+                } catch {}
+                return initialComplaints;
+            });
 
             const [currentCompany, setCurrentCompany] = useState(companies[0]);
             const [currentTender, setCurrentTender] = useState(tenders[0]);
@@ -6877,11 +7252,19 @@ ${hasExpiredIso ? '1. Renew ISO 9001:2015 certificate via an accredited certific
 
             // Handle grievance updates
             const handleAddComplaint = (newComp) => {
-                setComplaints(prev => [newComp, ...prev]);
+                setComplaints(prev => {
+                    const next = [newComp, ...prev];
+                    try { localStorage.setItem('bidlens_complaints', JSON.stringify(next)); } catch {}
+                    return next;
+                });
             };
 
             const handleUpdateComplaint = (compId, updates) => {
-                setComplaints(prev => prev.map(c => c.id === compId ? { ...c, ...updates } : c));
+                setComplaints(prev => {
+                    const next = prev.map(c => c.id === compId ? { ...c, ...updates } : c);
+                    try { localStorage.setItem('bidlens_complaints', JSON.stringify(next)); } catch {}
+                    return next;
+                });
             };
 
             return h('div', null,
@@ -6990,6 +7373,7 @@ ${hasExpiredIso ? '1. Renew ISO 9001:2015 certificate via an accredited certific
                         setT: setCurrentTender,
                         companies,
                         tenders,
+                        complaints,
                         onUpdateCompany: handleUpdateCompany
                     }) :
                     h(ProtectedGateScreen, {
