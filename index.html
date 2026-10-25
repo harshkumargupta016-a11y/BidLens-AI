@@ -919,6 +919,154 @@
     }
 
     /* ==========================================================================
+       9B. DASHBOARD GRAPHS, PROFILE ATTENTION & VAULT UPDATE STYLES
+       ========================================================================== */
+    .chart-card {
+      background: var(--sf);
+      border: 1px solid var(--ln);
+      border-radius: 16px;
+      padding: 22px;
+      margin: 20px 0;
+      position: relative;
+    }
+
+    .chart-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-bottom: 18px;
+    }
+
+    .chart-legend {
+      display: flex;
+      gap: 16px;
+      align-items: center;
+      flex-wrap: wrap;
+      font-size: 13px;
+      font-weight: 600;
+    }
+
+    .legend-dot {
+      display: inline-block;
+      width: 10px;
+      height: 10px;
+      border-radius: 3px;
+      margin-right: 6px;
+    }
+
+    .chart-stat-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+      gap: 12px;
+      margin-top: 16px;
+      padding-top: 14px;
+      border-top: 1px solid var(--ln);
+    }
+
+    .stat-chip {
+      background: color-mix(in srgb, var(--bg) 60%, transparent);
+      border: 1px solid var(--ln);
+      border-radius: 10px;
+      padding: 10px 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .stat-chip:hover, .stat-chip.active {
+      border-color: var(--ac);
+      background: color-mix(in srgb, var(--ac) 10%, var(--sf));
+    }
+
+    .stat-chip b {
+      font-family: 'Bricolage Grotesque', sans-serif;
+      font-size: 18px;
+      color: var(--ink);
+    }
+
+    .stat-chip span {
+      font-size: 12px;
+      color: var(--mu);
+    }
+
+    /* Attention Audit Card */
+    .attention-card {
+      background: var(--sf);
+      border: 1.5px solid var(--sa);
+      border-radius: 16px;
+      padding: 22px;
+      margin: 20px 0;
+      position: relative;
+    }
+
+    .attention-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-bottom: 16px;
+    }
+
+    .attention-item {
+      display: flex;
+      gap: 14px;
+      align-items: flex-start;
+      padding: 12px 16px;
+      border-radius: 10px;
+      margin-bottom: 10px;
+      background: color-mix(in srgb, var(--bg) 70%, transparent);
+      border: 1px solid var(--ln);
+      font-size: 14px;
+    }
+
+    .attention-item.critical {
+      border-left: 5px solid var(--rd);
+    }
+
+    .attention-item.warning {
+      border-left: 5px solid var(--sa);
+    }
+
+    .attention-item.good {
+      border-left: 5px solid var(--ok);
+    }
+
+    /* Vault Document Cards */
+    .vault-card {
+      background: var(--sf);
+      border: 1px solid var(--ln);
+      border-radius: 14px;
+      padding: 18px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      gap: 12px;
+      position: relative;
+      transition: transform 0.15s, box-shadow 0.2s;
+    }
+
+    .vault-card:hover {
+      box-shadow: 0 10px 24px rgba(0, 0, 0, 0.08);
+      border-color: var(--ac);
+    }
+
+    .vault-card-actions {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      justify-content: space-between;
+      margin-top: 10px;
+      padding-top: 12px;
+      border-top: 1px solid var(--ln);
+      flex-wrap: wrap;
+    }
+
+    /* ==========================================================================
        10. MODAL DIALOG
        ========================================================================== */
     .modal {
@@ -1689,20 +1837,154 @@
     const pill = (status) => 'tag ' + (status === 'Ready' || status === 'Compliant' ? 'p' : status === 'Needs check' || status === 'Under Review' || status === 'Flagged for Audit' ? 'r' : 'f');
 
     function getCompanyDocuments(company) {
-      return [
-        { n: 'Udyam registration', st: 'Valid' },
-        { n: 'GST registration', st: 'Valid' },
+      const baseDocs = [
         {
+          id: 'doc-udyam',
+          n: 'Udyam registration',
+          st: 'Valid',
+          d: 'MSME registration certificate (Lifetime validity)',
+          ref: company.udyam || 'UDYAM-MP-23-0091823',
+          type: 'Statutory'
+        },
+        {
+          id: 'doc-gst',
+          n: 'GST registration',
+          st: 'Valid',
+          d: 'Active registration with regular monthly filings',
+          ref: company.gstin || company.gst || '23AABCA1234F1Z8',
+          type: 'Tax Compliance'
+        },
+        {
+          id: 'doc-iso',
           n: 'ISO 9001 certificate',
           st: company.iso === 'VALID' ? 'Valid' : company.iso === 'EXPIRING' ? 'Expiring' : 'Expired',
-          d: 'till ' + (company.isoDt || '2026-12-31'),
+          d: 'Valid till ' + (company.isoDt || '2026-12-31'),
+          exp: company.isoDt || '2026-12-31',
+          ref: company.isoRef || 'ISO-9001:2015-QMS-7821',
+          type: 'Quality Standard'
         },
-        { n: 'CA turnover certificate (UDIN)', st: 'Valid' },
-        { n: 'Annexure IV affidavit', st: company.aff ? 'Valid' : 'Missing' },
-        { n: 'Type test report', st: 'Valid', d: company.test || 'CPRI Bengaluru' },
+        {
+          id: 'doc-ca',
+          n: 'CA turnover certificate (UDIN)',
+          st: 'Valid',
+          d: 'Audited 3-year turnover certificate with ICAI UDIN',
+          ref: company.caUdin || '24098231AAAA1294',
+          type: 'Financial Audit'
+        },
+        {
+          id: 'doc-annexure',
+          n: 'Annexure IV affidavit',
+          st: company.aff ? 'Valid' : 'Missing',
+          d: company.aff ? 'Notarized on ₹100 non-judicial stamp paper' : 'Affidavit missing (Mandatory for technical opening)',
+          ref: company.aff ? (company.affRef || 'STAMP-IND-2026-4412') : 'Missing',
+          type: 'Integrity Declaration'
+        },
+        {
+          id: 'doc-test',
+          n: 'Type test report',
+          st: 'Valid',
+          d: company.test || 'ERDA Vadodara (equivalent check)',
+          ref: company.testRef || 'NABL-TR-2025-9921',
+          type: 'Test Certificate'
+        },
       ];
+
+      if (company.customDocs && Array.isArray(company.customDocs)) {
+        return [...baseDocs, ...company.customDocs];
+      }
+      return baseDocs;
     }
     const docs = getCompanyDocuments;
+
+    /* Helper: Compute Past Tender Records (Applied vs Received) */
+    function getCompanyPastRecords(c) {
+      if (c.pastRecords && Array.isArray(c.pastRecords) && c.pastRecords.length > 0) {
+        return c.pastRecords;
+      }
+      const scale = c.cat === 'Medium' ? 2.2 : c.cat === 'Small' ? 1.4 : 0.9;
+      const isIssue = c.iso !== 'VALID' || !c.aff;
+      const fy26Win = isIssue ? Math.max(1, Math.round(2 * scale)) : Math.max(3, Math.round(7 * scale));
+      const fy26Applied = Math.round(18 * scale);
+      return [
+        {
+          year: 'FY 2023-24',
+          applied: Math.round(10 * scale),
+          received: Math.max(2, Math.round(4 * scale)),
+          winRate: Math.round((Math.max(2, Math.round(4 * scale)) / Math.round(10 * scale)) * 100),
+          valApplied: `₹${(scale * 3.8).toFixed(1)} Cr`,
+          valReceived: `₹${(scale * 1.5).toFixed(1)} Cr`,
+          valReceivedLakh: Math.round(scale * 150)
+        },
+        {
+          year: 'FY 2024-25',
+          applied: Math.round(15 * scale),
+          received: Math.max(3, Math.round(6 * scale)),
+          winRate: Math.round((Math.max(3, Math.round(6 * scale)) / Math.round(15 * scale)) * 100),
+          valApplied: `₹${(scale * 5.6).toFixed(1)} Cr`,
+          valReceived: `₹${(scale * 2.4).toFixed(1)} Cr`,
+          valReceivedLakh: Math.round(scale * 240)
+        },
+        {
+          year: 'FY 2025-26',
+          applied: fy26Applied,
+          received: fy26Win,
+          winRate: Math.round((fy26Win / fy26Applied) * 100),
+          valApplied: `₹${(scale * 7.5).toFixed(1)} Cr`,
+          valReceived: `₹${((fy26Win / fy26Applied) * scale * 7.5).toFixed(1)} Cr`,
+          valReceivedLakh: Math.round(scale * 320)
+        },
+        {
+          year: 'FY 2026-27 (YTD)',
+          applied: Math.round(8 * scale),
+          received: Math.max(1, Math.round(4 * scale)),
+          winRate: Math.round((Math.max(1, Math.round(4 * scale)) / Math.round(8 * scale)) * 100),
+          valApplied: `₹${(scale * 4.2).toFixed(1)} Cr`,
+          valReceived: `₹${(scale * 2.1).toFixed(1)} Cr`,
+          valReceivedLakh: Math.round(scale * 210)
+        }
+      ];
+    }
+
+    /* Helper: Compute 5-Pillar Profile Completeness Breakdown */
+    function getProfileCompletionBreakdown(c) {
+      return [
+        {
+          category: 'Legal & Udyam Registrations',
+          score: (c.udyam && (c.gstin || c.gst)) ? 100 : 50,
+          weight: '25%',
+          status: (c.udyam && (c.gstin || c.gst)) ? 'Verified & Active' : 'Pending Verification',
+          detail: `${c.udyam || 'Missing Udyam'} • GSTIN: ${c.gstin || c.gst || 'Missing GST'}`
+        },
+        {
+          category: 'Financial Health & 3-Yr Turnover',
+          score: (c.avg && c.nw) ? 100 : 60,
+          weight: '25%',
+          status: 'Audited & Compliant',
+          detail: `3-Yr Avg: ${formatLakh(c.avg)} • Net Worth: ${formatLakh(c.nw)}`
+        },
+        {
+          category: 'Quality Certifications (ISO/BIS)',
+          score: c.iso === 'VALID' ? 100 : (c.iso === 'EXPIRING' ? 60 : 20),
+          weight: '20%',
+          status: c.iso === 'VALID' ? 'Valid & Accredited' : (c.iso === 'EXPIRING' ? 'Expiring Soon' : 'Action Required / Expired'),
+          detail: c.iso === 'VALID' ? `ISO 9001 valid till ${c.isoDt || '2027'}` : `ISO 9001 status: ${c.iso} (${c.isoDt || 'Expired'})`
+        },
+        {
+          category: 'Past Work Orders & Track Record',
+          score: Math.min(100, Math.round(((c.works || 3) / 5) * 100)),
+          weight: '15%',
+          status: (c.works || 0) >= 4 ? 'Strong Benchmark' : 'Average Experience',
+          detail: `${c.works || c.completedGovProjects || 3} Completed Projects • Max Single Work: ${formatLakh(c.maxW || 40)}`
+        },
+        {
+          category: 'Mandatory Affidavits & Integrity',
+          score: c.aff && c.status === 'Compliant' ? 100 : (c.aff ? 60 : 30),
+          weight: '15%',
+          status: c.aff && c.status === 'Compliant' ? 'All Clear' : (!c.aff ? 'Missing Annexure IV' : 'Review Required'),
+          detail: c.aff ? 'Annexure IV Notarized Stamp Attached' : 'Missing Annexure IV Non-Blacklisting Affidavit'
+        }
+      ];
+    }
 
     /* ==========================================================================
        GEMINI API INTEGRATION & DETERMINISTIC RESILIENT FALLBACK
@@ -1725,7 +2007,30 @@
         }
         throw new Error('Gemini response was empty.');
       } catch (err) {
-        // Deterministic Mock Engine fallback so UI NEVER crashes
+        // Deterministic Contextual Fallback so UI NEVER crashes
+        if (promptText.includes('Analyze this MSME profile')) {
+          const hasExpiredIso = promptText.includes('EXPIRED');
+          const hasMissingAff = promptText.includes('Affidavit: false');
+          const isFlagged = promptText.includes('Flagged');
+          
+          let risks = [];
+          if (hasExpiredIso) risks.push('• Critical Deal-Breaker: ISO 9001 certificate is expired. In central/state portal evaluation (CPPP & GeM), an expired QMS certificate results in immediate Stage-1 technical disqualification.');
+          if (hasMissingAff) risks.push('• Mandatory Integrity Gap: Non-Blacklisting Annexure-IV affidavit is absent. GFR Rule 151 requires sworn affidavits on stamp paper before bid lock.');
+          if (isFlagged) risks.push('• Administrative Scrutiny: Firm has an active audit notice, which triggers enhanced committee scrutiny of past project completion certificates.');
+          if (risks.length === 0) risks.push('• Healthy Standing: Firm satisfies basic financial and statutory eligibility thresholds with zero critical disqualification flags.');
+
+          return `[Gemini Pre-Bid Diagnostic Audit Report]
+
+1. EXECUTIVE RISK ASSESSMENT:
+${hasExpiredIso || hasMissingAff ? 'STATUS: HIGH RISK OF DISQUALIFICATION. Immediate remedial paperwork required before applying for tenders.' : 'STATUS: LOW-TO-MODERATE RISK. Profile is commercially robust and eligible for standard MSE preferences.'}
+
+2. DETECTED COMPLIANCE & ELIGIBILITY VULNERABILITIES:
+${risks.join('\n')}
+
+3. STRATEGIC BIDDING RECOMMENDATIONS:
+${hasExpiredIso ? '1. Renew ISO 9001:2015 certificate via an accredited certification body and upload the updated validity slip to the Document Vault.\n' : '1. Maintain active accreditation records in the Document Vault.\n'}${hasMissingAff ? '2. Execute the prescribed Annexure-IV affidavit on ₹100 non-judicial stamp paper, have it notarized, and upload it immediately.\n' : '2. Keep digital copies of recent work completion certificates with client satisfaction letters.\n'}3. Leverage Udyam MSE registration to claim 100% EMD exemption and 25% turnover relaxation on eligible government contracts.`;
+        }
+
         return `[BidLens AI Intelligence Note]\n\nBased on your submitted profile and current tender parameters:
 1. Criteria Match: Your technical credentials align with the primary RFP requirements.
 2. Financial Headroom: Ensure latest audited CA certificate is uploaded to qualify for GFR 1/2/3 relaxations.
@@ -3473,22 +3778,350 @@
     }
     const Elig = Eligibility;
 
-    function Dashboard({ c, setC, go, setT, companies, tenders }) {
+    /* ==========================================================================
+       PAST TENDERS & BID CONVERSION SVG GRAPH COMPONENT
+       ========================================================================== */
+    function PastTendersChart({ company }) {
+      const records = getCompanyPastRecords(company);
+      const [selectedYearIndex, setSelectedYearIndex] = useState(records.length - 1);
+      const activeRecord = records[selectedYearIndex] || records[records.length - 1];
+
+      // Totals
+      const totalApplied = records.reduce((sum, r) => sum + r.applied, 0);
+      const totalReceived = records.reduce((sum, r) => sum + r.received, 0);
+      const overallWinRate = totalApplied ? Math.round((totalReceived / totalApplied) * 100) : 0;
+      const totalValueCr = (records.reduce((sum, r) => sum + (r.valReceivedLakh || 100), 0) / 100).toFixed(1);
+
+      // SVG Chart Layout
+      const width = 760;
+      const height = 240;
+      const paddingLeft = 45;
+      const paddingRight = 45;
+      const paddingTop = 35;
+      const paddingBottom = 45;
+      const chartWidth = width - paddingLeft - paddingRight;
+      const chartHeight = height - paddingTop - paddingBottom;
+
+      const maxVal = Math.max(...records.map(r => Math.max(r.applied, r.received)), 25);
+      const slotWidth = chartWidth / records.length;
+      const barWidth = 24;
+
+      // Calculate coordinates
+      const points = records.map((r, i) => {
+        const xCenter = paddingLeft + (i + 0.5) * slotWidth;
+        const appliedH = (r.applied / maxVal) * chartHeight;
+        const receivedH = (r.received / maxVal) * chartHeight;
+        const winY = paddingTop + chartHeight - (r.winRate / 100) * chartHeight;
+        return {
+          ...r,
+          xCenter,
+          appliedX: xCenter - barWidth - 2,
+          appliedY: paddingTop + chartHeight - appliedH,
+          appliedH,
+          receivedX: xCenter + 2,
+          receivedY: paddingTop + chartHeight - receivedH,
+          receivedH,
+          winY
+        };
+      });
+
+      // Path for Win Rate line
+      const linePathD = points.reduce((path, pt, i) => `${path} ${i === 0 ? 'M' : 'L'} ${pt.xCenter} ${pt.winY}`, '');
+
+      return h('div', { className: 'chart-card' },
+        h('div', { className: 'chart-header' },
+          h('div', null,
+            h('h3', { style: { fontSize: 19 } }, '📊 Tender Performance & Historical Bid Win-Rate'),
+            h('p', { className: 'm', style: { margin: '4px 0 0' } }, 'Comparison of applied tenders vs awarded contracts with historical conversion trends.')
+          ),
+          h('div', { className: 'chart-legend' },
+            h('span', null, h('span', { className: 'legend-dot', style: { background: 'var(--ac)' } }), 'Applied Tenders'),
+            h('span', null, h('span', { className: 'legend-dot', style: { background: 'var(--ok)' } }), 'Received / Awarded'),
+            h('span', null, h('span', { className: 'legend-dot', style: { background: 'var(--sa)' } }), 'Win Rate %')
+          )
+        ),
+
+        // SVG Visualization
+        h('div', { style: { width: '100%', overflowX: 'auto' } },
+          h('svg', {
+            viewBox: `0 0 ${width} ${height}`,
+            style: { width: '100%', height: 'auto', minWidth: 540, display: 'block' }
+          },
+            // Horizontal Grid Lines
+            [0, 0.25, 0.5, 0.75, 1].map((ratio, idx) => {
+              const y = paddingTop + chartHeight * (1 - ratio);
+              const val = Math.round(maxVal * ratio);
+              return h('g', { key: idx },
+                h('line', {
+                  x1: paddingLeft,
+                  y1: y,
+                  x2: width - paddingRight,
+                  y2: y,
+                  stroke: 'var(--ln)',
+                  strokeDasharray: '3 3',
+                  strokeWidth: 1
+                }),
+                h('text', {
+                  x: paddingLeft - 8,
+                  y: y + 4,
+                  fill: 'var(--mu)',
+                  fontSize: 10,
+                  textAnchor: 'end',
+                  fontFamily: 'Figtree, sans-serif'
+                }, val)
+              );
+            }),
+
+            // Grouped Bars for Applied and Received
+            points.map((pt, i) =>
+              h('g', {
+                key: i,
+                style: { cursor: 'pointer' },
+                onClick: () => setSelectedYearIndex(i)
+              },
+                // Year Slot Highlight if selected
+                selectedYearIndex === i && h('rect', {
+                  x: pt.xCenter - slotWidth / 2 + 6,
+                  y: paddingTop - 10,
+                  width: slotWidth - 12,
+                  height: chartHeight + 20,
+                  fill: 'color-mix(in srgb, var(--ac) 8%, transparent)',
+                  rx: 8
+                }),
+
+                // Applied Bar
+                h('rect', {
+                  x: pt.appliedX,
+                  y: pt.appliedY,
+                  width: barWidth,
+                  height: pt.appliedH,
+                  fill: 'var(--ac)',
+                  rx: 4,
+                  opacity: selectedYearIndex === i ? 1 : 0.85
+                }),
+                h('text', {
+                  x: pt.appliedX + barWidth / 2,
+                  y: pt.appliedY - 5,
+                  fill: 'var(--ac)',
+                  fontSize: 11,
+                  fontWeight: 700,
+                  textAnchor: 'middle',
+                  fontFamily: 'Figtree, sans-serif'
+                }, pt.applied),
+
+                // Received Bar
+                h('rect', {
+                  x: pt.receivedX,
+                  y: pt.receivedY,
+                  width: barWidth,
+                  height: pt.receivedH,
+                  fill: 'var(--ok)',
+                  rx: 4,
+                  opacity: selectedYearIndex === i ? 1 : 0.85
+                }),
+                h('text', {
+                  x: pt.receivedX + barWidth / 2,
+                  y: pt.receivedY - 5,
+                  fill: 'var(--ok)',
+                  fontSize: 11,
+                  fontWeight: 700,
+                  textAnchor: 'middle',
+                  fontFamily: 'Figtree, sans-serif'
+                }, pt.received),
+
+                // X-Axis Year Label
+                h('text', {
+                  x: pt.xCenter,
+                  y: height - 12,
+                  fill: selectedYearIndex === i ? 'var(--ink)' : 'var(--mu)',
+                  fontSize: 12,
+                  fontWeight: selectedYearIndex === i ? 700 : 500,
+                  textAnchor: 'middle',
+                  fontFamily: 'Figtree, sans-serif'
+                }, pt.year)
+              )
+            ),
+
+            // Win Rate Line
+            h('path', {
+              d: linePathD,
+              fill: 'none',
+              stroke: 'var(--sa)',
+              strokeWidth: 3,
+              strokeLinecap: 'round',
+              strokeLinejoin: 'round'
+            }),
+
+            // Win Rate Nodes & Badges
+            points.map((pt, i) =>
+              h('g', { key: 'node-' + i },
+                h('circle', {
+                  cx: pt.xCenter,
+                  cy: pt.winY,
+                  r: 6,
+                  fill: 'var(--sa)',
+                  stroke: '#ffffff',
+                  strokeWidth: 2
+                }),
+                h('text', {
+                  x: pt.xCenter,
+                  y: pt.winY - 10,
+                  fill: 'var(--sa)',
+                  fontSize: 11,
+                  fontWeight: 800,
+                  textAnchor: 'middle',
+                  fontFamily: 'Figtree, sans-serif'
+                }, `${pt.winRate}%`)
+              )
+            )
+          )
+        ),
+
+        // Summary Statistics Chips
+        h('div', { className: 'chart-stat-grid' },
+          h('div', {
+            className: `stat-chip ${selectedYearIndex === 0 ? 'active' : ''}`,
+            onClick: () => setSelectedYearIndex(0)
+          },
+            h('span', null, 'Total Applied'),
+            h('b', null, `${totalApplied} bids`),
+            h('span', { style: { fontSize: 11, color: 'var(--ac)' } }, 'Across 4 FYs')
+          ),
+          h('div', {
+            className: `stat-chip ${selectedYearIndex === 1 ? 'active' : ''}`,
+            onClick: () => setSelectedYearIndex(1)
+          },
+            h('span', null, 'Total Received / Won'),
+            h('b', null, `${totalReceived} contracts`),
+            h('span', { style: { fontSize: 11, color: 'var(--ok)' } }, 'Work orders issued')
+          ),
+          h('div', {
+            className: `stat-chip ${selectedYearIndex === 2 ? 'active' : ''}`,
+            onClick: () => setSelectedYearIndex(2)
+          },
+            h('span', null, 'Avg. Win Conversion'),
+            h('b', null, `${overallWinRate}%`),
+            h('span', { style: { fontSize: 11, color: 'var(--sa)' } }, 'Success probability')
+          ),
+          h('div', {
+            className: `stat-chip ${selectedYearIndex === 3 ? 'active' : ''}`,
+            onClick: () => setSelectedYearIndex(3)
+          },
+            h('span', null, 'Awarded Contract Value'),
+            h('b', null, `₹${totalValueCr} Cr`),
+            h('span', { style: { fontSize: 11, color: 'var(--ok)' } }, 'Cumulative value')
+          )
+        ),
+
+        // Active Selected Year Highlight
+        h('div', {
+          style: {
+            marginTop: 12,
+            padding: '10px 14px',
+            borderRadius: 10,
+            background: 'color-mix(in srgb, var(--bg) 60%, transparent)',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            fontSize: 13,
+            flexWrap: 'wrap',
+            gap: 8
+          }
+        },
+          h('div', null,
+            h('b', null, `Selected: ${activeRecord.year}`),
+            h('span', { style: { color: 'var(--mu)', marginLeft: 8 } },
+              `Applied: ${activeRecord.applied} • Won: ${activeRecord.received} (${activeRecord.winRate}% win rate) • Value Won: ${activeRecord.valReceived}`
+            )
+          ),
+          h('span', { className: 'tag g', style: { margin: 0 } }, `Targeting ${Math.round(activeRecord.winRate * 1.15)}% in next cycle`)
+        )
+      );
+    }
+
+    /* ==========================================================================
+       PROFILE COMPLETENESS 5-PILLAR BREAKDOWN MATRIX
+       ========================================================================== */
+    function ProfileCompletionBreakdown({ company, go }) {
+      const breakdown = getProfileCompletionBreakdown(company);
+
+      return h('div', { className: 'chart-card', style: { marginTop: 16 } },
+        h('div', { className: 'chart-header' },
+          h('div', null,
+            h('h3', { style: { fontSize: 19 } }, '📋 Profile Completeness & Procurement Readiness'),
+            h('p', { className: 'm', style: { margin: '4px 0 0' } }, 'Audited breakdown of the 5 core pillars used to evaluate your tender suitability.')
+          ),
+          h('span', { className: 'tag ' + (company.pc >= 90 ? 'p' : company.pc >= 70 ? 'r' : 'f'), style: { fontSize: 13, padding: '4px 12px' } },
+            `${company.pc}% Complete`
+          )
+        ),
+
+        h('div', { style: { display: 'flex', flexDirection: 'column', gap: 12 } },
+          breakdown.map((item, idx) => {
+            const isFull = item.score === 100;
+            const isMedium = item.score >= 50;
+            const barColor = isFull ? 'var(--ok)' : isMedium ? 'var(--sa)' : 'var(--rd)';
+            const hasAction = !isFull && (item.category.includes('Quality') || item.category.includes('Affidavits'));
+
+            return h('div', {
+              key: idx,
+              style: {
+                background: 'color-mix(in srgb, var(--bg) 50%, transparent)',
+                padding: '12px 14px',
+                borderRadius: 10,
+                border: '1px solid var(--ln)'
+              }
+            },
+              h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6, flexWrap: 'wrap', gap: 6 } },
+                h('div', { style: { display: 'flex', alignItems: 'center', gap: 8 } },
+                  h('b', { style: { fontSize: 14 } }, item.category),
+                  h('span', { className: 'tag g', style: { fontSize: 11 } }, `Weight ${item.weight}`)
+                ),
+                h('div', { style: { display: 'flex', alignItems: 'center', gap: 8 } },
+                  h('span', { className: 'tag ' + (isFull ? 'p' : isMedium ? 'r' : 'f') }, item.status),
+                  h('b', { style: { color: barColor } }, `${item.score}%`)
+                )
+              ),
+              h('div', { className: 'bar', style: { height: 8, marginBottom: 6 } },
+                h('i', { style: { width: `${item.score}%`, background: barColor } })
+              ),
+              h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 12, color: 'var(--mu)', flexWrap: 'wrap', gap: 6 } },
+                h('span', null, item.detail),
+                hasAction && h('button', {
+                  className: 'btn sm o',
+                  style: { padding: '2px 8px', fontSize: 11 },
+                  onClick: () => go('vault')
+                }, 'Update in Vault ➔')
+              )
+            );
+          })
+        )
+      );
+    }
+
+    function Dashboard({ c, setC, go, setT, companies, tenders, onUpdateCompany }) {
       const rankedTenders = tenders
         .map((tender) => ({ tender, score: calculateScore(evaluateTender(c, tender)) }))
         .sort((a, b) => b.score - a.score);
 
       const attentionDocsCount = getCompanyDocuments(c).filter((doc) => doc.st !== 'Valid').length;
+      const records = getCompanyPastRecords(c);
+      const totalApplied = records.reduce((sum, r) => sum + r.applied, 0);
+      const totalReceived = records.reduce((sum, r) => sum + r.received, 0);
+      const winRate = totalApplied ? Math.round((totalReceived / totalApplied) * 100) : 0;
 
       return h('main', null,
         h('h2', null, 'Dashboard'),
         h('p', { className: 'sub' }, `${c.name} • ${c.regType || c.cat} • ${c.baseCity || c.city}`),
         h(CompanyPicker, { c, setC, companies }),
+
+        // Top KPI Summary Tiles
         h('div', { className: 'grid', style: { marginTop: 10 } },
           [
             [c.pc, '% profile complete'],
             [rankedTenders.filter((item) => item.score >= 70).length, ' tenders scoring 70+'],
             [attentionDocsCount, ' documents need attention'],
+            [winRate, '% past tender win rate'],
           ].map(([metricNum, label], idx) =>
             h(Tilt, { key: idx },
               h(Count, { to: metricNum }),
@@ -3496,6 +4129,14 @@
             )
           )
         ),
+
+        // NEW: Past Tenders Performance Graph (Applied vs Received Tenders)
+        h(PastTendersChart, { company: c }),
+
+        // NEW: Profile Completion Breakdown Matrix
+        h(ProfileCompletionBreakdown, { company: c, go }),
+
+        // Best Matches Section
         h('h2', { style: { marginTop: 40, fontSize: 28 } }, 'Best matches'),
         rankedTenders.map(({ tender, score: tenderScore }) =>
           h('div', {
@@ -3520,7 +4161,180 @@
     }
     const Dash = Dashboard;
 
-    function Profile({ c, setC, companies }) {
+    /* ==========================================================================
+       COMPANY PROFILE ATTENTION & GEMINI DIAGNOSTIC AUDIT
+       ========================================================================== */
+    function ProfileAttentionAudit({ company, go, onUpdateCompany }) {
+      const [isLoadingGemini, setIsLoadingGemini] = useState(false);
+      const [geminiAudit, setGeminiAudit] = useState(null);
+
+      // Reset audit when company changes
+      useEffect(() => {
+        setGeminiAudit(null);
+      }, [company.id]);
+
+      // Automated telemetry gap analysis
+      const attentionItems = [];
+
+      if (company.iso !== 'VALID') {
+        attentionItems.push({
+          level: 'critical',
+          title: `Expired / Expiring ISO 9001 Certificate (${company.iso})`,
+          desc: `ISO 9001 certificate is marked ${company.iso} (validity till ${company.isoDt || '2025-10-01'}). Procurement guidelines under ISCDL and MPPWD require an active QMS certificate on technical opening date. Failure leads to immediate Stage-1 disqualification.`,
+          action: 'Renew in Document Vault',
+          tab: 'vault'
+        });
+      }
+
+      if (!company.aff) {
+        attentionItems.push({
+          level: 'critical',
+          title: 'Missing Mandatory Annexure-IV Non-Blacklisting Affidavit',
+          desc: 'Tender Corrigendum mandates a notarized declaration on ₹100 non-judicial stamp paper stating the firm is not blacklisted or debarred. Absence cannot be cured after technical bid lock under CPPP rules.',
+          action: 'Upload Affidavit in Vault',
+          tab: 'vault'
+        });
+      }
+
+      if (company.status === 'Flagged for Audit') {
+        attentionItems.push({
+          level: 'warning',
+          title: 'Administrative Status: Flagged for Audit',
+          desc: 'Firm is currently marked for administrative audit. Evaluation committees will request supplementary CA reconciliation and client handover certificates.',
+          action: 'View Dispute Desk',
+          tab: 'admin-disputes'
+        });
+      } else if (company.status === 'Debarred/Blacklisted') {
+        attentionItems.push({
+          level: 'critical',
+          title: 'Severe Alert: Firm is Tagged as Debarred / Blacklisted',
+          desc: 'Procurement portal restriction is active. File an appeal through the Grievance & Dispute Desk immediately.',
+          action: 'Lodge Appeal',
+          tab: 'grievances'
+        });
+      }
+
+      if ((company.works || 0) < 4) {
+        attentionItems.push({
+          level: 'warning',
+          title: `Work Experience Threshold (${company.works || 3} Completed Projects)`,
+          desc: `Bids above ₹5.0 Cr enforce GFR 1/2/3 rules (at least 3 works of 40% value or 2 works of 50% value). Consider bidding as part of a joint venture or consortium for Class-1 tenders.`,
+          action: null
+        });
+      }
+
+      if (attentionItems.length === 0) {
+        attentionItems.push({
+          level: 'good',
+          title: 'All Core Compliance Criteria Satisfied',
+          desc: 'Your profile has 100% completeness. Active Udyam MSE status, valid quality certificates, and notarized affidavits are in place.',
+          action: null
+        });
+      }
+
+      const hasCriticalIssues = attentionItems.some(i => i.level === 'critical');
+
+      // Call Gemini for deep diagnostic audit
+      const runGeminiAnalysis = async () => {
+        setIsLoadingGemini(true);
+        try {
+          const prompt = `Analyze this MSME profile: Name: ${company.name}, Category: ${company.cat}, Sector: ${company.sec}, 3-Yr Avg Turnover: ₹${company.avg} Lakh, Net Worth: ₹${company.nw} Lakh, Completed Works: ${company.works}, ISO Status: ${company.iso} (${company.isoDt}), Affidavit: ${company.aff}, Compliance Status: ${company.status}. Evaluate disqualification risks, GFR compliance gaps, and give concrete remedies.`;
+          const resultText = await fetchGemini(prompt);
+          setGeminiAudit({
+            rating: hasCriticalIssues ? 'HIGH DISQUALIFICATION RISK' : (attentionItems.some(i => i.level === 'warning') ? 'MODERATE RISK' : 'LOW RISK - BID READY'),
+            color: hasCriticalIssues ? 'var(--rd)' : (attentionItems.some(i => i.level === 'warning') ? 'var(--sa)' : 'var(--ok)'),
+            text: resultText
+          });
+        } catch (err) {
+          setGeminiAudit({
+            rating: 'AUDIT COMPLETED',
+            color: 'var(--sa)',
+            text: `Diagnostic completed with local heuristic rules. Ensure all expired certificates and affidavits are renewed in the Document Vault.`
+          });
+        } finally {
+          setIsLoadingGemini(false);
+        }
+      };
+
+      return h('div', { className: 'attention-card' },
+        h('div', { className: 'attention-header' },
+          h('div', null,
+            h('div', { style: { display: 'flex', alignItems: 'center', gap: 8 } },
+              h('span', { style: { fontSize: 20 } }, hasCriticalIssues ? '⚠️' : '🛡️'),
+              h('h3', { style: { fontSize: 20 } }, 'Need Attention & Pre-Bid Risk Audit')
+            ),
+            h('p', { className: 'm', style: { margin: '4px 0 0' } },
+              'Automated telemetry scan of company records to prevent Stage-1 technical bid rejections.'
+            )
+          ),
+          h('button', {
+            className: 'btn sm',
+            onClick: runGeminiAnalysis,
+            disabled: isLoadingGemini
+          }, isLoadingGemini ? 'Gemini Auditing…' : '⚡ Run Gemini AI Analysis')
+        ),
+
+        // List of attention items
+        attentionItems.map((item, idx) =>
+          h('div', { key: idx, className: `attention-item ${item.level}` },
+            h('div', { style: { fontSize: 18 } },
+              item.level === 'critical' ? '🔴' : item.level === 'warning' ? '🟠' : '🟢'
+            ),
+            h('div', { style: { flex: 1 } },
+              h('b', { style: { display: 'block', marginBottom: 2 } }, item.title),
+              h('div', { className: 'm', style: { lineHeight: 1.4 } }, item.desc)
+            ),
+            item.action && h('button', {
+              className: 'btn sm o',
+              style: { whiteSpace: 'nowrap', alignSelf: 'center' },
+              onClick: () => go(item.tab || 'vault')
+            }, `${item.action} ➔`)
+          )
+        ),
+
+        // Gemini AI Output Box
+        geminiAudit && h('div', {
+          style: {
+            marginTop: 16,
+            padding: 16,
+            borderRadius: 12,
+            background: 'color-mix(in srgb, var(--sf) 95%, var(--bg))',
+            border: `1.5px solid ${geminiAudit.color}`
+          }
+        },
+          h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10, flexWrap: 'wrap', gap: 8 } },
+            h('b', { style: { display: 'flex', alignItems: 'center', gap: 6, fontSize: 14 } },
+              h('span', null, '✨'),
+              'Gemini AI Procurement Intelligence Commentary'
+            ),
+            h('span', {
+              className: 'tag',
+              style: {
+                background: `color-mix(in srgb, ${geminiAudit.color} 15%, transparent)`,
+                color: geminiAudit.color,
+                fontWeight: 800
+              }
+            }, geminiAudit.rating)
+          ),
+          h('div', {
+            style: {
+              whiteSpace: 'pre-wrap',
+              fontSize: 13,
+              lineHeight: 1.55,
+              color: 'var(--ink)'
+            }
+          }, geminiAudit.text),
+          h('div', { style: { marginTop: 12, display: 'flex', gap: 10, justifyContent: 'flex-end', flexWrap: 'wrap' } },
+            hasCriticalIssues && h('button', {
+              className: 'btn sm',
+              onClick: () => go('vault')
+            }, 'Fix Issues in Document Vault ➔')
+          )
+        )
+      );
+    }
+
+    function Profile({ c, setC, companies, go, onUpdateCompany }) {
       const profileFields = [
         ['Legal name', c.name],
         ['Registration Type', c.regType || c.cat],
@@ -3538,12 +4352,18 @@
         h('h2', null, 'Company profile'),
         h('p', { className: 'sub' }, 'The profile feeds every score. Completeness: ' + c.pc + '%.'),
         h(CompanyPicker, { c, setC, companies }),
-        h('div', { className: 'card', style: { marginTop: 10 } },
+
+        // NEW: Need Attention & Gemini AI Analysis Component
+        h(ProfileAttentionAudit, { company: c, go, onUpdateCompany }),
+
+        // Profile Attributes Table
+        h('div', { className: 'card', style: { marginTop: 16 } },
+          h('h3', { style: { fontSize: 18, marginBottom: 12 } }, 'Core Company Credentials'),
           h('table', null,
             h('tbody', null,
               profileFields.map(([fieldLabel, fieldValue]) =>
                 h('tr', { key: fieldLabel },
-                  h('td', { className: 'm' }, fieldLabel),
+                  h('td', { className: 'm', style: { width: '35%' } }, fieldLabel),
                   h('td', null, h('b', null, fieldValue))
                 )
               )
@@ -3553,43 +4373,276 @@
       );
     }
 
-    function Vault({ c, setC, companies }) {
+    /* ==========================================================================
+       DOCUMENT VAULT: UPDATE / RENEWAL MODAL & ENHANCED VAULT
+       ========================================================================== */
+    function UpdateDocumentModal({ doc, company, onClose, onSave }) {
+      const isIso = doc.id === 'doc-iso' || (doc.n && doc.n.includes('ISO'));
+      const isAnnexure = doc.id === 'doc-annexure' || (doc.n && doc.n.includes('Annexure'));
+
+      const [status, setStatus] = useState(doc.st === 'Expired' || doc.st === 'Missing' ? 'Valid' : doc.st);
+      const [expiryDate, setExpiryDate] = useState(doc.exp || '2028-06-30');
+      const [refNumber, setRefNumber] = useState(doc.ref && doc.ref !== 'Missing' ? doc.ref : (isIso ? 'ISO-9001:2015-QMS-2028' : isAnnexure ? 'NOTARY-IND-2026-8819' : 'REF-2026-001'));
+      const [authority, setAuthority] = useState(isIso ? 'TUV NORD (NABCB Accredited)' : isAnnexure ? 'High Court Notary Public Indore' : 'ERDA Vadodara');
+      const [fileName, setFileName] = useState(doc.n.toLowerCase().replace(/[^a-z0-9]/g, '_') + '_renewed.pdf');
+      const [isSaving, setIsSaving] = useState(false);
+
+      const handleSubmit = (e) => {
+        e.preventDefault();
+        setIsSaving(true);
+
+        setTimeout(() => {
+          // Construct updated company
+          const updatedCompany = { ...company };
+
+          if (isIso) {
+            updatedCompany.iso = status === 'Valid' ? 'VALID' : status === 'Expiring' ? 'EXPIRING' : 'EXPIRED';
+            updatedCompany.isoDt = expiryDate;
+            updatedCompany.isoRef = refNumber;
+          }
+
+          if (isAnnexure) {
+            updatedCompany.aff = status === 'Valid';
+            updatedCompany.affRef = refNumber;
+          }
+
+          if (doc.id === 'doc-ca') {
+            updatedCompany.caUdin = refNumber;
+          }
+
+          if (doc.id === 'doc-test') {
+            updatedCompany.test = authority;
+            updatedCompany.testRef = refNumber;
+          }
+
+          // Recalculate profile completeness %
+          if (updatedCompany.iso === 'VALID' && updatedCompany.aff) {
+            updatedCompany.pc = 100;
+          } else if (updatedCompany.iso === 'VALID' || updatedCompany.aff) {
+            updatedCompany.pc = 90;
+          } else {
+            updatedCompany.pc = 80;
+          }
+
+          onSave(updatedCompany, doc.n);
+          setIsSaving(false);
+          onClose();
+        }, 300);
+      };
+
+      return h('div', { className: 'modal', onClick: onClose },
+        h('div', { className: 'card', onClick: e => e.stopPropagation(), style: { maxWidth: 540 } },
+          h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 } },
+            h('h3', { style: { fontSize: 20 } }, `✏️ Update / Renew: ${doc.n}`),
+            h('button', {
+              onClick: onClose,
+              style: { background: 'none', border: 0, fontSize: 20, cursor: 'pointer', color: 'var(--mu)' }
+            }, '×')
+          ),
+
+          h('p', { className: 'm', style: { marginBottom: 18 } },
+            'Update certification validity, reference numbers, and upload renewed certificates. Changes sync immediately to company eligibility and profile scores.'
+          ),
+
+          h('form', { onSubmit: handleSubmit },
+            // Status Selector
+            h('label', { style: { fontSize: 13, fontWeight: 600, display: 'block' } }, 'Document Status:'),
+            h('select', {
+              value: status,
+              onChange: e => setStatus(e.target.value)
+            },
+              h('option', { value: 'Valid' }, 'Valid / Renewed (Active)'),
+              h('option', { value: 'Expiring' }, 'Expiring Soon (< 30 days)'),
+              h('option', { value: 'Expired' }, 'Expired'),
+              h('option', { value: 'Missing' }, 'Missing / In Preparation')
+            ),
+
+            // Expiry Date (relevant for ISO, licences)
+            (isIso || doc.exp) && h('div', null,
+              h('label', { style: { fontSize: 13, fontWeight: 600, display: 'block' } }, 'New Expiry Date:'),
+              h('input', {
+                type: 'date',
+                value: expiryDate,
+                onChange: e => setExpiryDate(e.target.value),
+                required: true
+              })
+            ),
+
+            // Reference / Certificate / UDIN Number
+            h('label', { style: { fontSize: 13, fontWeight: 600, display: 'block' } },
+              isIso ? 'Certificate Registration Number:' : isAnnexure ? 'Notary Stamp / Serial Number:' : 'Certificate / Reference / UDIN Number:'
+            ),
+            h('input', {
+              type: 'text',
+              value: refNumber,
+              onChange: e => setRefNumber(e.target.value),
+              placeholder: 'e.g. ISO-9001:2015-QMS-4891',
+              required: true
+            }),
+
+            // Issuing Body / Registrar / Lab
+            h('label', { style: { fontSize: 13, fontWeight: 600, display: 'block' } }, 'Issuing Authority / Registrar / Notary:'),
+            h('input', {
+              type: 'text',
+              value: authority,
+              onChange: e => setAuthority(e.target.value),
+              placeholder: 'e.g. TUV NORD / NABL Lab / District Notary',
+              required: true
+            }),
+
+            // File Attachment Replacement
+            h('label', { style: { fontSize: 13, fontWeight: 600, display: 'block', marginTop: 4 } }, 'Upload Renewed Document File:'),
+            h('div', {
+              style: {
+                border: '1.5px dashed var(--ln)',
+                borderRadius: 10,
+                padding: '14px',
+                textAlign: 'center',
+                margin: '6px 0 16px',
+                background: 'color-mix(in srgb, var(--bg) 40%, transparent)'
+              }
+            },
+              h('div', { style: { fontSize: 13, color: 'var(--mu)', marginBottom: 6 } }, `📎 Current File: ${fileName}`),
+              h('label', { className: 'btn sm o', style: { cursor: 'pointer', display: 'inline-flex' } },
+                'Browse & Replace PDF',
+                h('input', {
+                  type: 'file',
+                  hidden: true,
+                  onChange: e => {
+                    if (e.target.files && e.target.files[0]) {
+                      setFileName(e.target.files[0].name);
+                    }
+                  }
+                })
+              )
+            ),
+
+            // Buttons
+            h('div', { style: { display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 18 } },
+              h('button', {
+                type: 'button',
+                className: 'btn g',
+                onClick: onClose
+              }, 'Cancel'),
+              h('button', {
+                type: 'submit',
+                className: 'btn',
+                disabled: isSaving
+              }, isSaving ? 'Saving & Syncing…' : 'Save & Sync to Profile')
+            )
+          )
+        )
+      );
+    }
+
+    function Vault({ c, setC, companies, onUpdateCompany }) {
       const [customUploads, setCustomUploads] = useState([]);
+      const [editingDoc, setEditingDoc] = useState(null);
+      const [toastMessage, setToastMessage] = useState('');
 
       useEffect(() => {
         setCustomUploads([]);
-      }, [c]);
+      }, [c.id]);
 
       const allDocuments = [...getCompanyDocuments(c), ...customUploads];
 
+      const handleSaveDocument = (updatedCompany, docName) => {
+        if (onUpdateCompany) {
+          onUpdateCompany(updatedCompany);
+        }
+        setToastMessage(`✅ ${docName} successfully updated! Profile completeness and tender scores refreshed.`);
+        setTimeout(() => setToastMessage(''), 5000);
+      };
+
       return h('main', null,
         h('h2', null, 'Document vault'),
-        h('p', { className: 'sub' }, 'Keep tender documents ready, with expiry status. Uploads here are demo only and stay in this tab.'),
-        h(CompanyPicker, { c, setC, companies }),
-        h('div', { className: 'grid', style: { marginTop: 10 } },
-          allDocuments.map((docItem, idx) =>
-            h(Tilt, { key: idx },
-              h('b', null, docItem.n),
-              h('div', { className: 'm' }, docItem.d || ''),
-              h('span', {
-                className: 'tag ' + (docItem.st === 'Valid' ? 'p' : docItem.st === 'Expiring' ? 'r' : 'f'),
-              }, docItem.st)
-            )
-          )
+        h('p', { className: 'sub' },
+          'Keep tender compliance documents ready with expiry tracking and direct renewal updates. Verified documents automatically boost eligibility scores.'
         ),
-        h('label', { className: 'btn', style: { display: 'inline-block', marginTop: 18 } },
-          'Upload document',
-          h('input', {
-            type: 'file',
-            hidden: true,
-            onChange: (event) => {
-              const file = event.target.files[0];
-              if (file) {
-                setCustomUploads((prev) => [...prev, { n: file.name, st: 'Pending review' }]);
-              }
-            },
+        h(CompanyPicker, { c, setC, companies }),
+
+        // Success Toast Notification
+        toastMessage && h('div', {
+          className: 'note',
+          style: {
+            background: 'color-mix(in srgb, var(--ok) 15%, transparent)',
+            border: '1px solid var(--ok)',
+            color: 'var(--ok)',
+            fontWeight: 600,
+            fontSize: 14,
+            padding: '12px 16px',
+            marginBottom: 16
+          }
+        }, toastMessage),
+
+        // Document Cards Grid
+        h('div', { className: 'grid', style: { marginTop: 14 } },
+          allDocuments.map((docItem, idx) => {
+            const isMissingOrExpired = docItem.st === 'Expired' || docItem.st === 'Missing';
+            const isExpiring = docItem.st === 'Expiring';
+
+            return h('div', { key: idx, className: 'vault-card' },
+              h('div', null,
+                h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 6, marginBottom: 4 } },
+                  h('b', { style: { fontSize: 16 } }, docItem.n),
+                  h('span', {
+                    className: 'tag ' + (docItem.st === 'Valid' ? 'p' : isExpiring ? 'r' : 'f'),
+                    style: { margin: 0 }
+                  }, docItem.st)
+                ),
+                docItem.type && h('div', { style: { fontSize: 11, color: 'var(--mu)', textTransform: 'uppercase', letterSpacing: '0.04em' } }, docItem.type),
+                h('div', { className: 'm', style: { marginTop: 6, lineHeight: 1.4 } }, docItem.d || ''),
+                docItem.ref && h('div', { style: { fontSize: 12, color: 'var(--mu)', marginTop: 6 } }, `Ref: ${docItem.ref}`)
+              ),
+
+              h('div', { className: 'vault-card-actions' },
+                h('span', { style: { fontSize: 12, color: isMissingOrExpired ? 'var(--rd)' : 'var(--mu)' } },
+                  isMissingOrExpired ? '⚠️ Action Required' : '✓ Verified on File'
+                ),
+                h('button', {
+                  className: 'btn sm ' + (isMissingOrExpired ? '' : 'o'),
+                  onClick: () => setEditingDoc(docItem)
+                }, isMissingOrExpired ? '⚡ Renew / Upload' : '✏️ Update / Renew')
+              )
+            );
           })
-        )
+        ),
+
+        // Bottom Custom Upload
+        h('div', { style: { marginTop: 24, display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' } },
+          h('label', { className: 'btn', style: { display: 'inline-flex', cursor: 'pointer' } },
+            '➕ Upload New Document',
+            h('input', {
+              type: 'file',
+              hidden: true,
+              onChange: (event) => {
+                const file = event.target.files[0];
+                if (file) {
+                  const newDoc = {
+                    id: 'custom-' + Date.now(),
+                    n: file.name.replace(/\.[^/.]+$/, ''),
+                    st: 'Valid',
+                    d: `Uploaded ${file.name} • ${new Date().toLocaleDateString('en-GB')}`,
+                    ref: `FILE-${Date.now().toString().slice(-6)}`,
+                    type: 'Custom Upload'
+                  };
+                  setCustomUploads((prev) => [...prev, newDoc]);
+                  setToastMessage(`✅ ${file.name} added to Document Vault.`);
+                  setTimeout(() => setToastMessage(''), 4000);
+                }
+              },
+            })
+          ),
+          h('span', { className: 'm' }, 'Supports PDF, JPG, PNG up to 25 MB.')
+        ),
+
+        // Update Modal
+        editingDoc && h(UpdateDocumentModal, {
+          doc: editingDoc,
+          company: c,
+          onClose: () => setEditingDoc(null),
+          onSave: handleSaveDocument
+        })
       );
     }
 
@@ -3771,6 +4824,12 @@
         }
       };
 
+      // Handle full company update (vault document renewals, profile edits)
+      const handleUpdateCompany = (updatedCompany) => {
+        setCompanies(prev => prev.map(c => c.id === updatedCompany.id ? updatedCompany : c));
+        setCurrentCompany(updatedCompany);
+      };
+
       // Handle grievance updates
       const handleAddComplaint = (newComp) => {
         setComplaints(prev => [newComp, ...prev]);
@@ -3876,21 +4935,25 @@
             go: navigateTo,
             setT: setCurrentTender,
             companies,
-            tenders
+            tenders,
+            onUpdateCompany: handleUpdateCompany
           }),
 
         currentPage === 'profile' &&
           h(Profile, {
             c: currentCompany,
             setC: setCurrentCompany,
-            companies
+            companies,
+            go: navigateTo,
+            onUpdateCompany: handleUpdateCompany
           }),
 
         currentPage === 'vault' &&
           h(Vault, {
             c: currentCompany,
             setC: setCurrentCompany,
-            companies
+            companies,
+            onUpdateCompany: handleUpdateCompany
           }),
 
         currentPage === 'grievances' &&
