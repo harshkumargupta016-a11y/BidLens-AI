@@ -4238,8 +4238,8 @@ ${hasExpiredIso ? '1. Renew ISO 9001:2015 certificate via an accredited certific
             );
         }
 
-        function AuthModal({ onClose, companies, currentCompany, setCurrentCompany, onLoginSuccess }) {
-            const [authRole, setAuthRole] = useState('bidder'); // 'bidder' | 'admin'
+        function AuthModal({ onClose, companies, currentCompany, setCurrentCompany, onLoginSuccess, initialRole = 'bidder', initialTargetPage = null }) {
+            const [authRole, setAuthRole] = useState(initialRole || 'bidder'); // 'bidder' | 'admin'
             const [authMode, setAuthMode] = useState('login'); // 'login' | 'signup'
 
             // Bidder inputs
@@ -4268,7 +4268,7 @@ ${hasExpiredIso ? '1. Renew ISO 9001:2015 certificate via an accredited certific
                         role: 'bidder',
                         companyId: currentCompany?.id
                     },
-                    targetPage: 'dash'
+                    targetPage: initialTargetPage || 'dash'
                 });
             };
 
@@ -4284,7 +4284,7 @@ ${hasExpiredIso ? '1. Renew ISO 9001:2015 certificate via an accredited certific
                         department: adminDept,
                         designation: adminDesignation
                     },
-                    targetPage: 'admin-dash'
+                    targetPage: initialTargetPage || 'admin-dash'
                 });
             };
 
@@ -6649,6 +6649,81 @@ ${hasExpiredIso ? '1. Renew ISO 9001:2015 certificate via an accredited certific
         }
 
         /* ==========================================================================
+           PROTECTED GATE SCREEN (AUTHENTICATION GATEWAY)
+           ========================================================================== */
+        function ProtectedGateScreen({ role = 'bidder', title, desc, onSignIn, onBack }) {
+            const isAdmin = role === 'admin';
+            return h('main', { style: { minHeight: '68vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '48px 16px' } },
+                h('div', {
+                    className: 'card',
+                    style: {
+                        maxWidth: 620,
+                        width: '100%',
+                        textAlign: 'center',
+                        padding: '40px 32px',
+                        border: '1px solid var(--ln)',
+                        borderRadius: '24px',
+                        boxShadow: '0 24px 60px rgba(0,0,0,0.14)',
+                        background: 'var(--sf)'
+                    }
+                },
+                    h('div', {
+                        style: {
+                            width: 72,
+                            height: 72,
+                            margin: '0 auto 18px auto',
+                            borderRadius: '50%',
+                            background: isAdmin ? 'rgba(15, 118, 110, 0.12)' : 'rgba(232, 137, 28, 0.12)',
+                            border: `2px solid ${isAdmin ? 'var(--ac)' : 'var(--sa)'}`,
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            fontSize: '2.2rem'
+                        }
+                    }, isAdmin ? '🏛️' : '🔒'),
+                    h('span', {
+                        className: `tag ${isAdmin ? 'g' : ''}`,
+                        style: { fontSize: '0.78rem', textTransform: 'uppercase', letterSpacing: '0.6px', marginBottom: 14 }
+                    }, isAdmin ? 'Restricted Authority Portal' : 'Restricted Contractor Portal'),
+                    h('h2', { style: { margin: '8px 0 12px 0', fontSize: '1.65rem' } }, title),
+                    h('p', { className: 'sub', style: { fontSize: '0.95rem', lineHeight: '1.65', marginBottom: '28px' } }, desc),
+                    h('div', { style: { display: 'flex', gap: '14px', justifyContent: 'center', flexWrap: 'wrap' } },
+                        h('button', {
+                            className: 'btn',
+                            style: { padding: '12px 26px', fontSize: '0.95rem', fontWeight: 700 },
+                            onClick: onSignIn
+                        }, isAdmin ? '🏛️ Sign In as Gov Officer' : '🏢 Sign In as MSME Bidder'),
+                        h('button', {
+                            className: 'btn o',
+                            style: { padding: '12px 22px', fontSize: '0.95rem' },
+                            onClick: onBack
+                        }, '← Back to Public Portal')
+                    ),
+                    h('div', {
+                        style: {
+                            marginTop: '28px',
+                            padding: '12px 18px',
+                            background: 'var(--bg)',
+                            borderRadius: '12px',
+                            fontSize: '0.82rem',
+                            color: 'var(--mu)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            flexWrap: 'wrap',
+                            gap: '8px'
+                        }
+                    },
+                        h('span', { style: { fontWeight: 600 } }, '💡 Quick Demo Credentials:'),
+                        h('span', { style: { fontFamily: 'monospace', color: 'var(--ink)' } },
+                            isAdmin ? 'officer@iscdl.gov.in (PIN: GOV-IND-2024)' : 'msme.bidder@apextelematics.in'
+                        )
+                    )
+                )
+            );
+        }
+
+        /* ==========================================================================
            MAIN ROOT APPLICATION COMPONENT
            ========================================================================== */
         function App() {
@@ -6673,6 +6748,16 @@ ${hasExpiredIso ? '1. Renew ISO 9001:2015 certificate via an accredited certific
             const [detailModalTender, setDetailModalTender] = useState(null);
             const [registerBidTender, setRegisterBidTender] = useState(null);
             const [grievanceTenderId, setGrievanceTenderId] = useState('');
+
+            // Auth modal targeting
+            const [authModalRole, setAuthModalRole] = useState('bidder');
+            const [authModalTargetPage, setAuthModalTargetPage] = useState(null);
+
+            const openLoginModal = (targetRole = 'bidder', targetPage = null) => {
+                setAuthModalRole(targetRole);
+                setAuthModalTargetPage(targetPage);
+                setShowLoginModal(true);
+            };
 
             // Secret Data Console & Database Access state (/get)
             const [showDataConsole, setShowDataConsole] = useState(false);
@@ -6722,10 +6807,22 @@ ${hasExpiredIso ? '1. Renew ISO 9001:2015 certificate via an accredited certific
             }, []);
 
             const navigateTo = (pageKey) => {
-                if (['dash', 'profile', 'vault'].includes(pageKey) && !currentUser && role === 'bidder') {
-                    setShowLoginModal(true);
-                    return;
+                // Bidder protected routes: dashboard, profile, vault require bidder login
+                if (['dash', 'profile', 'vault'].includes(pageKey)) {
+                    if (!currentUser || currentUser.role !== 'bidder') {
+                        openLoginModal('bidder', pageKey);
+                        return;
+                    }
                 }
+
+                // Gov / Admin protected routes: require admin login
+                if (['admin-dash', 'admin-studio', 'admin-hub', 'admin-disputes'].includes(pageKey)) {
+                    if (!currentUser || currentUser.role !== 'admin') {
+                        openLoginModal('admin', pageKey);
+                        return;
+                    }
+                }
+
                 setCurrentPage(pageKey);
                 window.scrollTo(0, 0);
             };
@@ -6749,7 +6846,9 @@ ${hasExpiredIso ? '1. Renew ISO 9001:2015 certificate via an accredited certific
                 ['tenders', 'Tenders Overview'],
             ];
 
-            const activeNavItems = role === 'bidder' ? bidderNavItems : adminNavItems;
+            const activeNavItems = (role === 'admin' && currentUser && currentUser.role === 'admin')
+                ? adminNavItems
+                : bidderNavItems;
 
             // Handle 1-Click Bid increment
             const handleConfirmBid = (tId) => {
@@ -6795,14 +6894,20 @@ ${hasExpiredIso ? '1. Renew ISO 9001:2015 certificate via an accredited certific
                             className: `role-btn ${role === 'bidder' ? 'active' : ''}`,
                             onClick: () => {
                                 setRole('bidder');
-                                setCurrentPage('home');
+                                if (['admin-dash', 'admin-studio', 'admin-hub', 'admin-disputes'].includes(currentPage)) {
+                                    setCurrentPage('home');
+                                }
                             }
                         }, '🏢 Bidder View'),
                         h('button', {
                             className: `role-btn ${role === 'admin' ? 'active' : ''}`,
                             onClick: () => {
-                                setRole('admin');
-                                setCurrentPage('admin-dash');
+                                if (currentUser && currentUser.role === 'admin') {
+                                    setRole('admin');
+                                    setCurrentPage('admin-dash');
+                                } else {
+                                    openLoginModal('admin', 'admin-dash');
+                                }
                             }
                         }, '🏛️ Gov / Admin View')
                     ),
@@ -6833,12 +6938,13 @@ ${hasExpiredIso ? '1. Renew ISO 9001:2015 certificate via an accredited certific
                         onClick: () => {
                             if (currentUser) {
                                 setCurrentUser(null);
+                                setRole('bidder');
                                 setCurrentPage('home');
                             } else {
-                                setShowLoginModal(true);
+                                openLoginModal(role, role === 'admin' ? 'admin-dash' : 'dash');
                             }
                         },
-                    }, currentUser ? 'Sign out' : 'Sign in')
+                    }, currentUser ? `Sign out (${currentUser.name?.split(' ')[0] || (currentUser.role === 'admin' ? 'Officer' : 'Bidder')})` : 'Sign in')
                 ),
 
                 // Page Routing (Bidder Views)
@@ -6848,7 +6954,7 @@ ${hasExpiredIso ? '1. Renew ISO 9001:2015 certificate via an accredited certific
                         go: navigateTo,
                         th: theme,
                         user: currentUser,
-                        login: () => setShowLoginModal(true),
+                        login: () => openLoginModal('bidder', 'dash'),
                     }),
                     h(Home, { go: navigateTo })
                 ),
@@ -6874,33 +6980,61 @@ ${hasExpiredIso ? '1. Renew ISO 9001:2015 certificate via an accredited certific
                     tenders
                 }),
 
-                currentPage === 'dash' &&
-                h(Dashboard, {
-                    c: currentCompany,
-                    setC: setCurrentCompany,
-                    go: navigateTo,
-                    setT: setCurrentTender,
-                    companies,
-                    tenders,
-                    onUpdateCompany: handleUpdateCompany
-                }),
+                // Protected Bidder Pages: only open after login/signup
+                currentPage === 'dash' && (
+                    (currentUser && currentUser.role === 'bidder') ?
+                    h(Dashboard, {
+                        c: currentCompany,
+                        setC: setCurrentCompany,
+                        go: navigateTo,
+                        setT: setCurrentTender,
+                        companies,
+                        tenders,
+                        onUpdateCompany: handleUpdateCompany
+                    }) :
+                    h(ProtectedGateScreen, {
+                        role: 'bidder',
+                        title: 'MSME Contractor Dashboard Locked',
+                        desc: 'Access to business performance analytics, profile completion diagnostics, and Gemini AI tender insights requires logging in to your verified MSME Bidder account.',
+                        onSignIn: () => openLoginModal('bidder', 'dash'),
+                        onBack: () => navigateTo('home')
+                    })
+                ),
 
-                currentPage === 'profile' &&
-                h(Profile, {
-                    c: currentCompany,
-                    setC: setCurrentCompany,
-                    companies,
-                    go: navigateTo,
-                    onUpdateCompany: handleUpdateCompany
-                }),
+                currentPage === 'profile' && (
+                    (currentUser && currentUser.role === 'bidder') ?
+                    h(Profile, {
+                        c: currentCompany,
+                        setC: setCurrentCompany,
+                        companies,
+                        go: navigateTo,
+                        onUpdateCompany: handleUpdateCompany
+                    }) :
+                    h(ProtectedGateScreen, {
+                        role: 'bidder',
+                        title: 'MSME Company Profile Locked',
+                        desc: 'Please sign in to view and update your enterprise data, Udyam certificate, GST registration, and audited financial parameters.',
+                        onSignIn: () => openLoginModal('bidder', 'profile'),
+                        onBack: () => navigateTo('home')
+                    })
+                ),
 
-                currentPage === 'vault' &&
-                h(Vault, {
-                    c: currentCompany,
-                    setC: setCurrentCompany,
-                    companies,
-                    onUpdateCompany: handleUpdateCompany
-                }),
+                currentPage === 'vault' && (
+                    (currentUser && currentUser.role === 'bidder') ?
+                    h(Vault, {
+                        c: currentCompany,
+                        setC: setCurrentCompany,
+                        companies,
+                        onUpdateCompany: handleUpdateCompany
+                    }) :
+                    h(ProtectedGateScreen, {
+                        role: 'bidder',
+                        title: 'Digital Document Vault Locked',
+                        desc: 'Please sign in to securely access, renew, and inspect your tamper-evident compliance certificates and GFR 153 affidavits.',
+                        onSignIn: () => openLoginModal('bidder', 'vault'),
+                        onBack: () => navigateTo('home')
+                    })
+                ),
 
                 currentPage === 'grievances' &&
                 h(GrievanceModule, {
@@ -6911,33 +7045,69 @@ ${hasExpiredIso ? '1. Renew ISO 9001:2015 certificate via an accredited certific
                     company: currentCompany
                 }),
 
-                // Page Routing (Gov / Admin Views)
-                currentPage === 'admin-dash' &&
-                h(AdminGovDashboard, {
-                    companies,
-                    tenders,
-                    complaints,
-                    onUpdateCompanyStatus: handleUpdateCompanyStatus,
-                    onUpdateComplaint: handleUpdateComplaint,
-                    go: navigateTo
-                }),
+                // Protected Gov / Admin Pages: only open after login/signup
+                currentPage === 'admin-dash' && (
+                    (currentUser && currentUser.role === 'admin') ?
+                    h(AdminGovDashboard, {
+                        companies,
+                        tenders,
+                        complaints,
+                        onUpdateCompanyStatus: handleUpdateCompanyStatus,
+                        onUpdateComplaint: handleUpdateComplaint,
+                        go: navigateTo
+                    }) :
+                    h(ProtectedGateScreen, {
+                        role: 'admin',
+                        title: 'Government Authority Dashboard Locked',
+                        desc: 'Access to Centralized MSME Contractor Intelligence, interactive tender outcome pie-charts, Gemini verification scores, and binding dispute redressal is restricted to authorized Government Procurement Officers under GFR 153/151.',
+                        onSignIn: () => openLoginModal('admin', 'admin-dash'),
+                        onBack: () => { setRole('bidder'); navigateTo('home'); }
+                    })
+                ),
 
-                currentPage === 'admin-studio' &&
-                h(AdminTenderStudio, {
-                    onPublishTender: handlePublishTender
-                }),
+                currentPage === 'admin-studio' && (
+                    (currentUser && currentUser.role === 'admin') ?
+                    h(AdminTenderStudio, {
+                        onPublishTender: handlePublishTender
+                    }) :
+                    h(ProtectedGateScreen, {
+                        role: 'admin',
+                        title: 'AI Tender Studio Locked',
+                        desc: 'Drafting and publishing public procurement tenders requires authorized Government Officer credentials.',
+                        onSignIn: () => openLoginModal('admin', 'admin-studio'),
+                        onBack: () => { setRole('bidder'); navigateTo('home'); }
+                    })
+                ),
 
-                currentPage === 'admin-hub' &&
-                h(AdminContractorHub, {
-                    companies,
-                    onUpdateCompanyStatus: handleUpdateCompanyStatus
-                }),
+                currentPage === 'admin-hub' && (
+                    (currentUser && currentUser.role === 'admin') ?
+                    h(AdminContractorHub, {
+                        companies,
+                        onUpdateCompanyStatus: handleUpdateCompanyStatus
+                    }) :
+                    h(ProtectedGateScreen, {
+                        role: 'admin',
+                        title: 'Contractor Intelligence Hub Locked',
+                        desc: 'Contractor compliance audits and KYC verification are restricted to Government Authorities.',
+                        onSignIn: () => openLoginModal('admin', 'admin-hub'),
+                        onBack: () => { setRole('bidder'); navigateTo('home'); }
+                    })
+                ),
 
-                currentPage === 'admin-disputes' &&
-                h(AdminDisputeDesk, {
-                    complaints,
-                    onUpdateComplaint: handleUpdateComplaint
-                }),
+                currentPage === 'admin-disputes' && (
+                    (currentUser && currentUser.role === 'admin') ?
+                    h(AdminDisputeDesk, {
+                        complaints,
+                        onUpdateComplaint: handleUpdateComplaint
+                    }) :
+                    h(ProtectedGateScreen, {
+                        role: 'admin',
+                        title: 'Dispute Redressal Desk Locked',
+                        desc: 'Official grievance investigation, formal committee rulings, and corrigenda directives require Government Authority login.',
+                        onSignIn: () => openLoginModal('admin', 'admin-disputes'),
+                        onBack: () => { setRole('bidder'); navigateTo('home'); }
+                    })
+                ),
 
                 // Detail Modal
                 detailModalTender &&
@@ -6999,11 +7169,14 @@ ${hasExpiredIso ? '1. Renew ISO 9001:2015 certificate via an accredited certific
                     companies,
                     currentCompany,
                     setCurrentCompany,
+                    initialRole: authModalRole,
+                    initialTargetPage: authModalTargetPage,
                     onLoginSuccess: ({ role: userRole, user, targetPage }) => {
                         setCurrentUser(user);
                         setRole(userRole);
                         setShowLoginModal(false);
-                        navigateTo(targetPage);
+                        setCurrentPage(targetPage || (userRole === 'admin' ? 'admin-dash' : 'dash'));
+                        window.scrollTo(0, 0);
                     }
                 })
             );
