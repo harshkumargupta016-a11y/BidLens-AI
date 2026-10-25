@@ -1,5 +1,5 @@
 /**
- * BidLens AI — MSME Data Seeding & Normalization Script
+ * BidLens AI — MSME Data Seeding & Normalization Script (TypeScript Source)
  *
  * Normalizes a flat 38-column CSV (bidlens_ai_60_msme_companies_seed.csv) into 3 relational tables:
  *   1. msme_profiles   (Company identity, demographics, audited 3-yr financials)
@@ -7,33 +7,62 @@
  *   3. vault_documents (Regulatory certificates, ISO validity, affidavits, and lab reports)
  *
  * Execution Modes:
- *   - Supabase: Uses @supabase/supabase-js if SUPABASE_URL & SUPABASE_SERVICE_ROLE_KEY/ANON_KEY are present
- *   - PostgreSQL: Uses pg Pool if DATABASE_URL is present
- *   - Standalone / File Generation: Always writes an atomic database/seed_msme_normalized.sql file
+ *   - Native Supabase REST HTTPS API: Zero-dependency seeding if SUPABASE_URL & SUPABASE_KEY are in .env
+ *   - @supabase/supabase-js SDK: Used if installed in environment
+ *   - PostgreSQL Pool: Used if DATABASE_URL is present
+ *   - Standalone SQL: Writes database/seed_msme_normalized.sql
  *
  * Run with:
- *   npx tsx scripts/seed-msmes.ts [options]
- *   Options: --sql-only, --csv-path=<path>, --batch-size=50
+ *   node scripts/seed-msmes.js
+ *   OR npx tsx scripts/seed-msmes.ts
  */
 
 import * as fs from 'fs';
 import * as path from 'path';
 
-// Optional dynamic imports for Supabase and pg if installed
+// Auto-load .env without requiring external dotenv package
+function loadEnv(): void {
+  const candidateEnvPaths = [
+    path.resolve(process.cwd(), '.env'),
+    path.resolve(__dirname, '../.env'),
+    path.resolve(__dirname, '../../.env'),
+    path.resolve(process.cwd(), 'bidlens-backend/.env'),
+  ];
+
+  for (const envPath of candidateEnvPaths) {
+    if (fs.existsSync(envPath)) {
+      try {
+        const content = fs.readFileSync(envPath, 'utf8');
+        for (const line of content.split(/\r?\n/)) {
+          const match = line.match(/^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*?)\s*$/);
+          if (match && !(match[1] in process.env)) {
+            process.env[match[1]] = match[2].replace(/^(['"])(.*)\1$/, '$2');
+          }
+        }
+      } catch {}
+    }
+  }
+}
+
+loadEnv();
+
+// Optional dynamic imports
 let createClient: any = null;
 try {
-  const supabaseModule = require('@supabase/supabase-js');
-  createClient = supabaseModule.createClient;
-} catch {
-  // Gracefully ignored if not installed in current environment
-}
+  const req = typeof require !== 'undefined' ? require : null;
+  if (req) {
+    const supabaseModule = req('@supabase/supabase-js');
+    createClient = supabaseModule.createClient;
+  }
+} catch {}
 
 let pg: any = null;
 try {
-  pg = require('pg');
-} catch {
-  // Gracefully ignored if not installed in current environment
-}
+  const req = typeof require !== 'undefined' ? require : null;
+  if (req) {
+    pg = req('pg');
+  }
+} catch {}
 
 // -----------------------------------------------------------------------------
 // Interfaces
@@ -167,7 +196,7 @@ function escapeSqlStr(val: any): string {
 }
 
 // -----------------------------------------------------------------------------
-// Robust CSV Parser (zero external dependency fallback)
+// CSV Parser
 // -----------------------------------------------------------------------------
 export function parseCsv(csvContent: string): RawCsvRow[] {
   const lines = csvContent.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n');
@@ -202,7 +231,7 @@ function parseCsvLine(line: string): string[] {
     if (char === '"') {
       if (inQuotes && line[i + 1] === '"') {
         current += '"';
-        i++; // skip escaped quote
+        i++;
       } else {
         inQuotes = !inQuotes;
       }
@@ -228,7 +257,6 @@ export function normalizeMsmeData(rows: RawCsvRow[]): NormalizedDataset {
   for (const row of rows) {
     if (!row.company_id || !row.legal_name) continue;
 
-    // 1. msme_profiles
     const categoryRaw = row.enterprise_category?.trim() || 'Small';
     const category = (['Micro', 'Small', 'Medium'].includes(categoryRaw)
       ? categoryRaw
@@ -259,7 +287,6 @@ export function normalizeMsmeData(rows: RawCsvRow[]): NormalizedDataset {
       is_demo_seed: true,
     });
 
-    // 2. work_orders (Work Order 1 to 3)
     const woConfigs = [
       { num: 1, client: row.work_order_1_client, val: row.work_order_1_value_lakhs, yr: row.work_order_1_year },
       { num: 2, client: row.work_order_2_client, val: row.work_order_2_value_lakhs, yr: row.work_order_2_year },
@@ -280,34 +307,24 @@ export function normalizeMsmeData(rows: RawCsvRow[]): NormalizedDataset {
       }
     }
 
-    // 3. vault_documents (5 Standard Regulatory Credentials)
-    // 3A. Udyam Registration
     vaultDocuments.push({
       company_id: row.company_id.trim(),
       doc_type: 'UDYAM',
       document_name: 'Udyam Registration Certificate',
       status: (row.udyam_cert_status?.trim().toUpperCase() || 'VALID') as any,
       valid_until: null,
-      details: {
-        udyam_number: row.udyam_number?.trim(),
-        enterprise_category: category,
-      },
+      details: { udyam_number: row.udyam_number?.trim(), enterprise_category: category },
     });
 
-    // 3B. GST Certificate
     vaultDocuments.push({
       company_id: row.company_id.trim(),
       doc_type: 'GST',
       document_name: 'GST Registration Certificate (Form REG-06)',
       status: (row.gst_cert_status?.trim().toUpperCase() || 'VALID') as any,
       valid_until: null,
-      details: {
-        gst_number: row.gst_number?.trim(),
-        jurisdiction_state: row.state?.trim(),
-      },
+      details: { gst_number: row.gst_number?.trim(), jurisdiction_state: row.state?.trim() },
     });
 
-    // 3C. ISO 9001:2015
     const isoStatusRaw = row.iso_9001_status?.trim().toUpperCase();
     const isoStatus = ['VALID', 'EXPIRED', 'MISSING', 'UPLOADED'].includes(isoStatusRaw) ? isoStatusRaw : 'VALID';
     vaultDocuments.push({
@@ -316,13 +333,9 @@ export function normalizeMsmeData(rows: RawCsvRow[]): NormalizedDataset {
       document_name: 'ISO 9001:2015 Quality Management Certificate',
       status: isoStatus as any,
       valid_until: parseDateStr(row.iso_9001_valid_until),
-      details: {
-        accreditation: 'NABCB / IAF Accredited Certification Body',
-        scope: row.sector?.trim(),
-      },
+      details: { accreditation: 'NABCB / IAF Accredited Certification Body', scope: row.sector?.trim() },
     });
 
-    // 3D. Annexure IV Affidavit
     const isAnnexureUploaded = parseBool(row.annexure_iv_affidavit_uploaded, false);
     vaultDocuments.push({
       company_id: row.company_id.trim(),
@@ -330,14 +343,9 @@ export function normalizeMsmeData(rows: RawCsvRow[]): NormalizedDataset {
       document_name: 'Annexure IV Non-Debarment & Non-Blacklisting Affidavit',
       status: isAnnexureUploaded ? 'VALID' : 'MISSING',
       valid_until: null,
-      details: {
-        format: 'Revised Corrigendum-I Standard Format',
-        stamp_duty: '₹100 Non-Judicial Stamp Paper',
-        notarized: isAnnexureUploaded,
-      },
+      details: { format: 'Revised Corrigendum-I Standard Format', stamp_duty: '₹100 Non-Judicial Stamp Paper', notarized: isAnnexureUploaded },
     });
 
-    // 3E. Independent Type Test Report
     const labName = row.type_test_report_lab?.trim();
     const hasLab = !!(labName && labName.length > 0 && labName.toLowerCase() !== 'missing' && labName.toLowerCase() !== 'none');
     vaultDocuments.push({
@@ -346,10 +354,7 @@ export function normalizeMsmeData(rows: RawCsvRow[]): NormalizedDataset {
       document_name: 'Independent Type Test Report (CPRI / ERDA)',
       status: hasLab ? 'VALID' : 'MISSING',
       valid_until: null,
-      details: {
-        laboratory_accreditation: labName || 'Not Appended',
-        nabl_compliant: hasLab,
-      },
+      details: { laboratory_accreditation: labName || 'Not Appended', nabl_compliant: hasLab },
     });
   }
 
@@ -368,7 +373,6 @@ export function generateSqlSeedScript(dataset: NormalizedDataset): string {
   parts.push(`-- ==============================================================================`);
   parts.push(`BEGIN;\n`);
 
-  // 1. msme_profiles
   parts.push(`-- 1. Insert msme_profiles`);
   for (const p of dataset.profiles) {
     parts.push(
@@ -395,7 +399,6 @@ export function generateSqlSeedScript(dataset: NormalizedDataset): string {
   }
   parts.push('');
 
-  // 2. work_orders
   parts.push(`-- 2. Insert work_orders`);
   parts.push(`DELETE FROM public.work_orders WHERE company_id IN (${dataset.profiles.map(p => escapeSqlStr(p.id)).join(', ')});`);
   for (const w of dataset.workOrders) {
@@ -407,7 +410,6 @@ export function generateSqlSeedScript(dataset: NormalizedDataset): string {
   }
   parts.push('');
 
-  // 3. vault_documents
   parts.push(`-- 3. Insert vault_documents`);
   parts.push(`DELETE FROM public.vault_documents WHERE company_id IN (${dataset.profiles.map(p => escapeSqlStr(p.id)).join(', ')});`);
   for (const v of dataset.vaultDocuments) {
@@ -426,38 +428,98 @@ export function generateSqlSeedScript(dataset: NormalizedDataset): string {
 }
 
 // -----------------------------------------------------------------------------
+// Direct Supabase REST HTTPS Seeder (Zero external dependencies)
+// -----------------------------------------------------------------------------
+async function seedViaSupabaseRest(supabaseUrl: string, supabaseKey: string, dataset: NormalizedDataset): Promise<void> {
+  console.log(`📡 Connecting directly to Supabase REST API (${supabaseUrl})...`);
+  const headers = {
+    'apikey': supabaseKey,
+    'Authorization': `Bearer ${supabaseKey}`,
+    'Content-Type': 'application/json',
+    'Prefer': 'resolution=merge-duplicates'
+  };
+
+  console.log(`📦 Upserting ${dataset.profiles.length} msme_profiles via REST...`);
+  const resP = await fetch(`${supabaseUrl.replace(/\/$/, '')}/rest/v1/msme_profiles`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(dataset.profiles)
+  });
+  if (!resP.ok) {
+    const errText = await resP.text();
+    throw new Error(`msme_profiles upsert failed (HTTP ${resP.status}): ${errText}`);
+  }
+
+  console.log(`📦 Inserting ${dataset.workOrders.length} work_orders via REST...`);
+  const companyIds = dataset.profiles.map(p => p.id).join(',');
+  await fetch(`${supabaseUrl.replace(/\/$/, '')}/rest/v1/work_orders?company_id=in.(${companyIds})`, {
+    method: 'DELETE',
+    headers
+  });
+  const resW = await fetch(`${supabaseUrl.replace(/\/$/, '')}/rest/v1/work_orders`, {
+    method: 'POST',
+    headers: { ...headers, 'Prefer': 'return=minimal' },
+    body: JSON.stringify(dataset.workOrders)
+  });
+  if (!resW.ok) {
+    const errText = await resW.text();
+    throw new Error(`work_orders insert failed (HTTP ${resW.status}): ${errText}`);
+  }
+
+  console.log(`📦 Inserting ${dataset.vaultDocuments.length} vault_documents via REST...`);
+  await fetch(`${supabaseUrl.replace(/\/$/, '')}/rest/v1/vault_documents?company_id=in.(${companyIds})`, {
+    method: 'DELETE',
+    headers
+  });
+  const resV = await fetch(`${supabaseUrl.replace(/\/$/, '')}/rest/v1/vault_documents`, {
+    method: 'POST',
+    headers: { ...headers, 'Prefer': 'return=minimal' },
+    body: JSON.stringify(dataset.vaultDocuments)
+  });
+  if (!resV.ok) {
+    const errText = await resV.text();
+    throw new Error(`vault_documents insert failed (HTTP ${resV.status}): ${errText}`);
+  }
+
+  console.log(`✅ Supabase database successfully seeded over REST HTTPS!`);
+}
+
+// -----------------------------------------------------------------------------
 // Seeder Runner
 // -----------------------------------------------------------------------------
-export async function seedDatabase(dataset: NormalizedDataset) {
+export async function seedDatabase(dataset: NormalizedDataset): Promise<void> {
   const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY;
   const databaseUrl = process.env.DATABASE_URL;
 
-  // 1. Direct Supabase Client Mode
-  if (supabaseUrl && supabaseKey && createClient) {
-    console.log(`📡 Connecting to Supabase (${supabaseUrl})...`);
-    const supabase = createClient(supabaseUrl, supabaseKey);
-
-    // Upsert profiles in batches of 50
-    console.log(`📦 Upserting ${dataset.profiles.length} msme_profiles...`);
-    const { error: pErr } = await supabase.from('msme_profiles').upsert(dataset.profiles, { onConflict: 'id' });
-    if (pErr) throw new Error(`Error upserting msme_profiles: ${pErr.message}`);
-
-    // Clean old demo work orders and reinsert
-    console.log(`📦 Inserting ${dataset.workOrders.length} work_orders...`);
-    const companyIds = dataset.profiles.map(p => p.id);
-    await supabase.from('work_orders').delete().in('company_id', companyIds);
-    const { error: wErr } = await supabase.from('work_orders').insert(dataset.workOrders);
-    if (wErr) throw new Error(`Error inserting work_orders: ${wErr.message}`);
-
-    // Clean old demo vault documents and reinsert
-    console.log(`📦 Inserting ${dataset.vaultDocuments.length} vault_documents...`);
-    await supabase.from('vault_documents').delete().in('company_id', companyIds);
-    const { error: vErr } = await supabase.from('vault_documents').insert(dataset.vaultDocuments);
-    if (vErr) throw new Error(`Error inserting vault_documents: ${vErr.message}`);
-
-    console.log(`✅ Supabase database successfully seeded!`);
+  if (process.argv.includes('--sql-only')) {
+    console.log(`ℹ️ --sql-only flag specified. Skipping remote database execution.`);
     return;
+  }
+
+  // 1. Supabase Mode
+  if (supabaseUrl && supabaseKey) {
+    if (createClient) {
+      try {
+        console.log(`📡 Connecting via @supabase/supabase-js SDK (${supabaseUrl})...`);
+        const supabase = createClient(supabaseUrl, supabaseKey);
+        await supabase.from('msme_profiles').upsert(dataset.profiles, { onConflict: 'id' });
+        const companyIds = dataset.profiles.map(p => p.id);
+        await supabase.from('work_orders').delete().in('company_id', companyIds);
+        await supabase.from('work_orders').insert(dataset.workOrders);
+        await supabase.from('vault_documents').delete().in('company_id', companyIds);
+        await supabase.from('vault_documents').insert(dataset.vaultDocuments);
+        console.log(`✅ Supabase database successfully seeded via SDK!`);
+        return;
+      } catch (err: any) {
+        console.warn(`⚠️ SDK seed error (${err.message}). Falling back to REST API...`);
+        await seedViaSupabaseRest(supabaseUrl, supabaseKey, dataset);
+        return;
+      }
+    } else {
+      await seedViaSupabaseRest(supabaseUrl, supabaseKey, dataset);
+      return;
+    }
   }
 
   // 2. Direct PostgreSQL Pool Mode
@@ -481,18 +543,17 @@ export async function seedDatabase(dataset: NormalizedDataset) {
     return;
   }
 
-  // 3. Fallback: SQL Script generated
-  console.log(`ℹ️ No active SUPABASE_URL or DATABASE_URL detected in environment.`);
-  console.log(`   Generated standalone SQL migration script ready to paste into Supabase SQL Editor.`);
+  console.log(`ℹ️ To execute against live Supabase / PostgreSQL:`);
+  console.log(`   - Paste 'database/seed_msme_normalized.sql' into Supabase SQL Editor`);
+  console.log(`   - OR add SUPABASE_URL & SUPABASE_SERVICE_ROLE_KEY to your .env file and rerun this script.`);
 }
 
 // -----------------------------------------------------------------------------
 // CLI Main Execution
 // -----------------------------------------------------------------------------
-async function main() {
+async function main(): Promise<void> {
   console.log(`🚀 Starting BidLens AI 60 MSME Company Dataset Normalizer & Seeder...`);
 
-  // Find CSV file path
   const candidatePaths = [
     path.resolve(process.cwd(), 'bidlens_ai_60_msme_companies_seed.csv'),
     path.resolve(process.cwd(), '../bidlens_ai_60_msme_companies_seed.csv'),
@@ -515,14 +576,12 @@ async function main() {
   const rawRows = parseCsv(csvContent);
   console.log(`📊 Successfully parsed ${rawRows.length} raw MSME rows from CSV.`);
 
-  // Normalize
   const normalized = normalizeMsmeData(rawRows);
   console.log(`✨ Normalization complete:`);
-  console.log(`   - 🏢 msme_profiles:  ${normalized.profiles.length} rows`);
-  console.log(`   - 💼 work_orders:    ${normalized.workOrders.length} rows`);
-  console.log(`   - 📜 vault_documents:${normalized.vaultDocuments.length} rows`);
+  console.log(`   - 🏢 msme_profiles:   ${normalized.profiles.length} rows`);
+  console.log(`   - 💼 work_orders:     ${normalized.workOrders.length} rows`);
+  console.log(`   - 📜 vault_documents: ${normalized.vaultDocuments.length} rows`);
 
-  // Write SQL output file
   const outDir = path.resolve(process.cwd(), 'database');
   if (!fs.existsSync(outDir)) fs.mkdirSync(outDir, { recursive: true });
   const sqlOutPath = path.join(outDir, 'seed_msme_normalized.sql');
@@ -531,17 +590,17 @@ async function main() {
   fs.writeFileSync(sqlOutPath, sqlScript, 'utf8');
   console.log(`💾 Generated standalone SQL seed script:\n   -> ${sqlOutPath} (${(sqlScript.length / 1024).toFixed(1)} KB)`);
 
-  // Run database seed if credentials present
   try {
     await seedDatabase(normalized);
   } catch (err: any) {
     console.error(`⚠️ Database seed execution error:`, err.message);
   }
 
-  console.log(`\n🎉 All done! You can now run this SQL directly in your Supabase SQL Editor or via database migration pipelines.`);
+  console.log(`\n🎉 Process completed successfully!`);
 }
 
-if (require.main === module) {
+// Support both CommonJS and ES Modules entrypoints
+if (typeof require !== 'undefined' && require.main === module) {
   main().catch(err => {
     console.error(`Fatal error:`, err);
     process.exit(1);

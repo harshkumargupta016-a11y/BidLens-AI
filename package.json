@@ -1,0 +1,22 @@
+{
+  "name": "bidlens-ai",
+  "version": "1.0.0",
+  "description": "BidLens AI – Pre-bid intelligence, tender eligibility checker, and governance platform for Indian MSMEs and Government Authorities.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js",
+    "seed": "node scripts/seed-msmes.js",
+    "seed:sql": "node scripts/seed-msmes.js --sql-only"
+  },
+  "keywords": [
+    "msme",
+    "tenders",
+    "procurement",
+    "gemini",
+    "supabase",
+    "bidlens"
+  ],
+  "author": "BidLens AI",
+  "license": "ISC"
+}
