@@ -18,5 +18,8 @@
     "bidlens"
   ],
   "author": "BidLens AI",
-  "license": "ISC"
+  "license": "ISC",
+  "devDependencies": {
+    "@types/node": "^26.6.5"
+  }
 }
