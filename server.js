@@ -277,9 +277,11 @@ function startServer(candidatePort, attempts = 0) {
     process.exitCode = 1;
   });
 
-  instance.listen(candidatePort, '127.0.0.1', () => {
-    const url = `http://127.0.0.1:${candidatePort}`;
-    console.log(`BidLens is running at ${url}`);
+  const host = process.env.HOST || '0.0.0.0';
+  instance.listen(candidatePort, host, () => {
+    const displayHost = host === '0.0.0.0' ? 'localhost' : host;
+    const url = `http://${displayHost}:${candidatePort}`;
+    console.log(`BidLens is running at ${url} (bound to ${host}:${candidatePort})`);
     if (process.env.BIDLENS_OPEN_BROWSER === '1') {
       execFile('cmd.exe', ['/c', 'start', '', url], (error) => {
         if (error) console.error(`Could not open browser automatically: ${error.message}`);
