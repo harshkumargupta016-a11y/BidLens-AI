@@ -3,3 +3,9 @@
 !.env.example
 node_modules/
 npm-debug.log*
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+ENV/
