@@ -14,7 +14,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@500;700;800&family=Figtree:wght@400;500;600;700&display=swap" rel="stylesheet">
 
   <!-- Leaflet CSS for Geospatial Proximity Map -->
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css" integrity="sha512-Zcn6bjR/8RZbLEpLIeOwNtzREBAJnUKNRxkmCnuZI03IcaTW/mAQW+wwwbET0OzVCzxP/+mdChk2bANDFF8ghA==" crossorigin="" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
 
   <style>
     /* ==========================================================================
@@ -698,10 +698,12 @@
        ========================================================================== */
     .map-wrapper {
       margin: 16px 0 28px;
-      border: 1px solid var(--ln);
+      border: 1.5px solid var(--ln);
       border-radius: 16px;
       overflow: hidden;
       background: var(--sf);
+      box-shadow: 0 4px 18px rgba(18, 38, 58, 0.05);
+      position: relative;
     }
 
     .map-header {
@@ -715,24 +717,72 @@
     }
 
     .map-container {
-      height: 380px;
+      height: 420px;
       width: 100%;
       position: relative;
       z-index: 1;
+      background: #f8f4eb;
     }
 
     .custom-map-pin {
       background: none !important;
       border: none !important;
+      cursor: pointer;
+    }
+
+    .leaflet-container {
+      font-family: Figtree, system-ui, sans-serif !important;
+      background: #f8f4eb !important;
+    }
+
+    :root[data-theme="dark"] .leaflet-container {
+      background: #07111a !important;
+    }
+
+    :root[data-theme="dark"] .leaflet-tile {
+      filter: brightness(0.75) invert(1) contrast(1.4) hue-rotate(190deg) saturate(0.6);
+    }
+
+    .leaflet-control-zoom {
+      border: 1px solid var(--ln) !important;
+      border-radius: 10px !important;
+      overflow: hidden;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12) !important;
+    }
+
+    .leaflet-control-zoom a {
+      background: var(--sf) !important;
+      color: var(--ink) !important;
+      border-color: var(--ln) !important;
+      font-family: Figtree, sans-serif !important;
+      transition: background 0.15s;
+    }
+
+    .leaflet-control-zoom a:hover {
+      background: var(--hb) !important;
+      color: var(--ac) !important;
+    }
+
+    .leaflet-control-attribution {
+      background: color-mix(in srgb, var(--sf) 85%, transparent) !important;
+      color: var(--mu) !important;
+      font-size: 11px !important;
+      padding: 2px 8px !important;
+      border-radius: 6px 0 0 0;
+    }
+
+    .leaflet-control-attribution a {
+      color: var(--ac) !important;
+      text-decoration: none;
     }
 
     .leaflet-popup-content-wrapper {
       background: var(--sf) !important;
       color: var(--ink) !important;
       border: 1px solid var(--ln) !important;
-      border-radius: 12px !important;
-      box-shadow: 0 14px 30px rgba(0, 0, 0, 0.25) !important;
-      padding: 6px !important;
+      border-radius: 14px !important;
+      box-shadow: 0 14px 32px rgba(0, 0, 0, 0.28) !important;
+      padding: 4px !important;
     }
 
     .leaflet-popup-tip {
@@ -740,8 +790,28 @@
     }
 
     .leaflet-popup-content {
-      margin: 8px 10px !important;
+      margin: 10px 12px !important;
       font-family: Figtree, sans-serif !important;
+      line-height: 1.45;
+    }
+
+    .map-legend {
+      position: absolute;
+      bottom: 12px;
+      left: 12px;
+      z-index: 1000;
+      background: color-mix(in srgb, var(--sf) 92%, transparent);
+      backdrop-filter: blur(8px);
+      border: 1px solid var(--ln);
+      border-radius: 99px;
+      padding: 6px 14px;
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      font-size: 12px;
+      font-weight: 600;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+      flex-wrap: wrap;
     }
 
     /* ==========================================================================
@@ -1042,7 +1112,7 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.3.1/umd/react.production.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.3.1/umd/react-dom.production.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js" integrity="sha512-BwHfrr4c9kmRkLw6iXFdzcdWV/PGkVgiIyIWLLlTSXzSmZ367HpdU0hhXYGY2BIWP948zBt9FPvWbDeTxN+VXw==" crossorigin=""></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 
   <script>
     'use strict';
@@ -1754,17 +1824,23 @@
     /* ==========================================================================
        LEAFLET GEOSPATIAL MAP COMPONENT ("TENDERS NEAR ME")
        ========================================================================== */
-    function LeafletGeoMap({ tenders, onSelectTender }) {
+    function LeafletGeoMap({ tenders, company, onSelectTender }) {
       const mapContainerRef = useRef(null);
-      const leafletInstanceRef = useRef(null);
+      const leafletMapRef = useRef(null);
       const markersLayerRef = useRef(null);
+      const circleLayerRef = useRef(null);
 
       const [selectedCity, setSelectedCity] = useState('All');
       const [maxRadiusKm, setMaxRadiusKm] = useState(500);
+      const [isLeafletLoaded, setIsLeafletLoaded] = useState(() => typeof window !== 'undefined' && !!window.L);
+      const [mapInitialized, setMapInitialized] = useState(false);
+      const [visibleCount, setVisibleCount] = useState(tenders.length);
 
       const CITIES = {
         'Indore': { lat: 22.7196, lng: 75.8577 },
         'Bhopal': { lat: 23.2599, lng: 77.4126 },
+        'Pithampur': { lat: 22.6140, lng: 75.6880 },
+        'Dewas': { lat: 22.9676, lng: 76.0534 },
         'Ratlam': { lat: 23.3315, lng: 75.0367 },
         'Ujjain': { lat: 23.1765, lng: 75.7885 },
         'Delhi': { lat: 28.6139, lng: 77.2090 },
@@ -1772,69 +1848,150 @@
         'Bengaluru': { lat: 12.9716, lng: 77.5946 },
       };
 
-      // Initialize map once
+      // 1. Ensure Leaflet library is ready
       useEffect(() => {
-        if (!mapContainerRef.current || typeof window === 'undefined' || !window.L) return;
+        if (typeof window === 'undefined') return;
+        if (window.L) {
+          setIsLeafletLoaded(true);
+          return;
+        }
+
+        const pollInterval = setInterval(() => {
+          if (window.L) {
+            setIsLeafletLoaded(true);
+            clearInterval(pollInterval);
+          }
+        }, 50);
+
+        return () => clearInterval(pollInterval);
+      }, []);
+
+      // 2. Initialize Leaflet Map with OpenStreetMap
+      useEffect(() => {
+        if (!isLeafletLoaded || !mapContainerRef.current || !window.L) return;
+
+        // Clean up any existing map attached to the container
+        if (leafletMapRef.current) {
+          try {
+            leafletMapRef.current.remove();
+          } catch (e) {}
+          leafletMapRef.current = null;
+        }
 
         const L = window.L;
-        const initialCoords = [22.9734, 76.5]; // Central MP
+        const initialCoords = [22.9734, 76.5]; // Central MP / India
         const map = L.map(mapContainerRef.current, {
           center: initialCoords,
           zoom: 6,
-          scrollWheelZoom: false,
+          scrollWheelZoom: true,
+          zoomControl: true,
         });
 
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-          attribution: '© OpenStreetMap contributors',
-          maxZoom: 18,
+        // OpenStreetMap Tile Layer
+        L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+          maxZoom: 19,
+          attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank">OpenStreetMap</a> contributors',
         }).addTo(map);
 
+        const circleGroup = L.layerGroup().addTo(map);
         const markersGroup = L.layerGroup().addTo(map);
-        leafletInstanceRef.current = map;
-        markersLayerRef.current = markersGroup;
 
-        // Invalidate size after layout settles
-        const timer = setTimeout(() => {
-          map.invalidateSize();
-        }, 300);
+        leafletMapRef.current = map;
+        circleLayerRef.current = circleGroup;
+        markersLayerRef.current = markersGroup;
+        setMapInitialized(true);
+
+        // Force multi-stage tile redraw to prevent grey/blank tiles
+        [80, 250, 500, 1000].forEach((delay) => {
+          setTimeout(() => {
+            if (leafletMapRef.current) {
+              leafletMapRef.current.invalidateSize();
+            }
+          }, delay);
+        });
+
+        const handleResize = () => {
+          if (leafletMapRef.current) {
+            leafletMapRef.current.invalidateSize();
+          }
+        };
+        window.addEventListener('resize', handleResize);
 
         return () => {
-          clearTimeout(timer);
-          map.remove();
-          leafletInstanceRef.current = null;
+          window.removeEventListener('resize', handleResize);
+          if (leafletMapRef.current) {
+            leafletMapRef.current.remove();
+            leafletMapRef.current = null;
+          }
+          setMapInitialized(false);
         };
-      }, []);
+      }, [isLeafletLoaded]);
 
-      // Custom SVG Marker Icon Generator (Zero broken asset 404s)
-      const createCustomSvgPin = (alphaScore) => {
-        const pinColor = alphaScore >= 80 ? '#15803d' : alphaScore >= 60 ? '#e8891c' : '#c2410c';
-        const svgContent = `
-          <svg width="34" height="42" viewBox="0 0 34 42" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <path d="M17 0C7.611 0 0 7.611 0 17C0 27.5 17 42 17 42C17 42 34 27.5 34 17C34 7.611 26.389 0 17 0Z" fill="${pinColor}" filter="drop-shadow(0 2px 5px rgba(0,0,0,0.4))"/>
-            <circle cx="17" cy="16" r="10" fill="#ffffff"/>
-            <text x="17" y="20" text-anchor="middle" fill="${pinColor}" font-family="Figtree, sans-serif" font-weight="bold" font-size="11">${alphaScore}</text>
-          </svg>
-        `;
-        return window.L.divIcon({
-          className: 'custom-map-pin',
-          html: svgContent,
-          iconSize: [34, 42],
-          iconAnchor: [17, 42],
-          popupAnchor: [0, -38],
-        });
-      };
-
-      // Filter and render markers
+      // 3. Render Points and Location Marks
       useEffect(() => {
-        if (!leafletInstanceRef.current || !markersLayerRef.current || !window.L) return;
+        if (!mapInitialized || !leafletMapRef.current || !markersLayerRef.current || !circleLayerRef.current || !window.L) {
+          return;
+        }
 
-        const map = leafletInstanceRef.current;
-        const layer = markersLayerRef.current;
-        layer.clearLayers();
+        const L = window.L;
+        const map = leafletMapRef.current;
+        const markersGroup = markersLayerRef.current;
+        const circleGroup = circleLayerRef.current;
+
+        markersGroup.clearLayers();
+        circleGroup.clearLayers();
+
+        // Contractor Base City
+        const compCity = company?.city || (company?.baseCity ? company.baseCity.split(',')[0].trim() : 'Indore');
+        const companyCoords = CITIES[compCity] || CITIES['Indore'];
 
         const centerBase = selectedCity !== 'All' && CITIES[selectedCity]
           ? CITIES[selectedCity]
-          : CITIES['Indore'];
+          : companyCoords;
+
+        // A. Location Mark: Registered Contractor Base Marker (🏢)
+        const baseIcon = L.divIcon({
+          className: 'custom-map-pin',
+          html: `
+            <svg width="38" height="48" viewBox="0 0 38 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M19 0C8.5 0 0 8.5 0 19C0 31 19 48 19 48C19 48 38 31 38 19C38 8.5 29.5 0 19 0Z" fill="#12263a"/>
+              <path d="M19 2C9.6 2 2 9.6 2 19C2 30 19 45.5 19 45.5C19 45.5 36 30 36 19C36 9.6 28.4 2 19 2Z" fill="#0f766e"/>
+              <circle cx="19" cy="18" r="12" fill="#fffdf7"/>
+              <text x="19" y="23" text-anchor="middle" font-size="14">🏢</text>
+            </svg>
+          `,
+          iconSize: [38, 48],
+          iconAnchor: [19, 48],
+          popupAnchor: [0, -42],
+        });
+
+        const baseMarker = L.marker([companyCoords.lat, companyCoords.lng], {
+          icon: baseIcon,
+          zIndexOffset: 1000,
+        });
+
+        baseMarker.bindPopup(`
+          <div style="font-family: Figtree, sans-serif; min-width: 170px;">
+            <div style="font-size: 10px; color: var(--ac); font-weight: 800; text-transform: uppercase;">Your Registered Firm</div>
+            <div style="font-size: 14px; font-weight: 700; margin: 2px 0;">${company?.name || 'Contractor'}</div>
+            <div style="font-size: 12px; color: var(--mu);">📍 Base: ${compCity}, Madhya Pradesh</div>
+          </div>
+        `);
+        markersGroup.addLayer(baseMarker);
+
+        // B. Proximity Radius Circle (Geofence)
+        L.circle([centerBase.lat, centerBase.lng], {
+          radius: maxRadiusKm * 1000,
+          color: '#0f766e',
+          fillColor: '#0f766e',
+          fillOpacity: 0.08,
+          weight: 1.5,
+          dashArray: '5 5',
+        }).addTo(circleGroup);
+
+        // C. Location Marks: Plot Tender Points
+        const bounds = L.latLngBounds([[companyCoords.lat, companyCoords.lng]]);
+        let inRadiusCount = 0;
 
         tenders.forEach((tender) => {
           if (!tender.location || !tender.location.lat || !tender.location.lng) return;
@@ -1848,45 +2005,85 @@
 
           if (selectedCity !== 'All' && distanceKm > maxRadiusKm) return;
 
+          inRadiusCount++;
+          bounds.extend([tender.location.lat, tender.location.lng]);
+
           const alphaVal = tender.geminiScore?.overall || 75;
-          const marker = window.L.marker([tender.location.lat, tender.location.lng], {
-            icon: createCustomSvgPin(alphaVal),
+          const pinColor = alphaVal >= 80 ? '#15803d' : alphaVal >= 60 ? '#e8891c' : '#c2410c';
+
+          const tenderPinIcon = L.divIcon({
+            className: 'custom-map-pin',
+            html: `
+              <svg width="34" height="44" viewBox="0 0 34 44" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M17 0C7.6 0 0 7.6 0 17C0 28 17 44 17 44C17 44 34 28 34 17C34 7.6 26.4 0 17 0Z" fill="${pinColor}"/>
+                <circle cx="17" cy="16" r="10.5" fill="#ffffff"/>
+                <text x="17" y="20.5" text-anchor="middle" fill="${pinColor}" font-family="Figtree, sans-serif" font-weight="800" font-size="11">${alphaVal}</text>
+              </svg>
+            `,
+            iconSize: [34, 44],
+            iconAnchor: [17, 44],
+            popupAnchor: [0, -38],
           });
 
-          // Custom styled Popup
-          const popupContent = `
-            <div style="min-width: 200px;">
-              <div style="font-weight: 700; font-size: 14px; margin-bottom: 2px;">${tender.title}</div>
-              <div style="color: var(--mu); font-size: 12px; margin-bottom: 6px;">${tender.department} • ${tender.location.city}</div>
-              <div style="display: flex; gap: 6px; align-items: center; margin-bottom: 8px;">
-                <span class="tag" style="margin: 0;">${formatCurrencyInr(tender.budget)}</span>
-                <span class="tag ${alphaVal >= 80 ? 'p' : alphaVal >= 60 ? 'r' : 'f'}" style="margin: 0;">Score ${alphaVal}</span>
+          const tenderMarker = L.marker([tender.location.lat, tender.location.lng], {
+            icon: tenderPinIcon,
+          });
+
+          const popupHtml = `
+            <div style="min-width: 220px; font-family: Figtree, sans-serif;">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                <span class="tag" style="margin: 0; font-size: 10px;">${tender.category || 'Tender'}</span>
+                <span class="tag ${alphaVal >= 80 ? 'p' : alphaVal >= 60 ? 'r' : 'f'}" style="margin: 0; font-size: 10px;">Score ${alphaVal}</span>
               </div>
-              <button id="view-tnd-${tender.id}" class="btn sm" style="width: 100%; padding: 5px;">View Details & Score</button>
+              <div style="font-weight: 700; font-size: 14px; line-height: 1.25; margin-bottom: 3px;">${tender.title}</div>
+              <div style="color: var(--mu); font-size: 12px; margin-bottom: 6px;">📍 ${tender.location.city} • ${distanceKm} km from hub</div>
+              <div style="display: flex; gap: 6px; align-items: center; margin-bottom: 8px;">
+                <span class="tag" style="margin: 0; font-weight: 700;">${tender.val || formatCurrencyInr(tender.budget)}</span>
+                <span class="tag g" style="margin: 0;">EMD ${tender.emd ? formatCurrencyInr(tender.emd) : 'Exempt'}</span>
+              </div>
+              <button id="view-tnd-${tender.id}" class="btn sm" style="width: 100%; padding: 6px; font-size: 12px;">View Details & 1-Click Bid</button>
             </div>
           `;
 
-          marker.bindPopup(popupContent);
-          marker.on('popupopen', () => {
+          tenderMarker.bindPopup(popupHtml);
+          tenderMarker.on('popupopen', () => {
             const btn = document.getElementById(`view-tnd-${tender.id}`);
             if (btn) {
               btn.onclick = () => onSelectTender(tender);
             }
           });
 
-          layer.addLayer(marker);
+          markersGroup.addLayer(tenderMarker);
         });
 
-        if (selectedCity !== 'All' && CITIES[selectedCity]) {
-          map.flyTo([CITIES[selectedCity].lat, CITIES[selectedCity].lng], 10, { duration: 1 });
+        setVisibleCount(inRadiusCount);
+
+        // Adjust view / bounds
+        if (selectedCity === 'All' && inRadiusCount > 0) {
+          try {
+            map.fitBounds(bounds.pad(0.18));
+          } catch (e) {}
+        } else if (selectedCity !== 'All' && CITIES[selectedCity]) {
+          map.flyTo([CITIES[selectedCity].lat, CITIES[selectedCity].lng], 10, { duration: 0.8 });
         }
-      }, [tenders, selectedCity, maxRadiusKm]);
+      }, [mapInitialized, tenders, company, selectedCity, maxRadiusKm]);
+
+      const handleFitAll = () => {
+        if (!leafletMapRef.current || !markersLayerRef.current) return;
+        try {
+          const bounds = markersLayerRef.current.getBounds();
+          if (bounds.isValid()) {
+            leafletMapRef.current.fitBounds(bounds.pad(0.2));
+          }
+        } catch (e) {}
+      };
 
       return h('div', { className: 'map-wrapper' },
         h('div', { className: 'map-header' },
           h('div', { style: { display: 'flex', alignItems: 'center', gap: 6 } },
             h('span', { style: { fontSize: 18 } }, '📍'),
-            h('b', null, 'Tenders Near Me & Geospatial Proximity')
+            h('b', null, 'Tenders Near Me & Geospatial Proximity'),
+            h('span', { className: 'tag g', style: { fontSize: 11, marginLeft: 6 } }, `${visibleCount} active`)
           ),
           h('div', { style: { display: 'flex', gap: 10, alignItems: 'center', marginLeft: 'auto', flexWrap: 'wrap' } },
             h('label', { style: { fontSize: 13, color: 'var(--mu)' } }, 'City Hub:'),
@@ -1907,10 +2104,30 @@
               value: maxRadiusKm,
               style: { width: 110, margin: 0 },
               onChange: (e) => setMaxRadiusKm(Number(e.target.value))
-            })
+            }),
+            h('button', {
+              className: 'btn sm g',
+              style: { padding: '5px 10px', fontSize: 12 },
+              onClick: handleFitAll,
+              title: 'Center view on all tender markers'
+            }, '🎯 Fit All Marks')
           )
         ),
-        h('div', { ref: mapContainerRef, className: 'map-container' })
+
+        // Map Canvas Container
+        h('div', {
+          ref: mapContainerRef,
+          className: 'map-container',
+          style: { height: 420, width: '100%', position: 'relative' }
+        }),
+
+        // Visual Map Legend
+        h('div', { className: 'map-legend' },
+          h('span', null, '🟢 High Fit (80+)'),
+          h('span', null, '🟡 Calculated (60–79)'),
+          h('span', null, '🔴 High Risk (<60)'),
+          h('span', null, '🏢 Contractor Base')
+        )
       );
     }
 
@@ -3111,6 +3328,7 @@
         // Interactive Geo-Map
         showMap && h(LeafletGeoMap, {
           tenders,
+          company: c,
           onSelectTender: (t) => onOpenDetailModal(t)
         }),
 
