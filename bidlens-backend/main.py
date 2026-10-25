@@ -23,6 +23,7 @@ from routers.tenders import router as tenders_router
 from routers.bids import router as bids_router
 from routers.complaints import router as complaints_router
 from routers.ai_score import router as ai_score_router
+from routers.sync import router as sync_router
 
 # Configure Logging
 logging.basicConfig(
@@ -160,6 +161,7 @@ app.include_router(tenders_router)
 app.include_router(bids_router)
 app.include_router(complaints_router)
 app.include_router(ai_score_router)
+app.include_router(sync_router)
 
 
 # Local Execution Entrypoint

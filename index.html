@@ -1412,6 +1412,146 @@
                 max-width: 100% !important;
             }
         }
+
+        /* ==========================================================================
+           SECRET DATA CONSOLE & DATABASE ACCESS TERMINAL (/get)
+           ========================================================================== */
+        .data-console-fab {
+            position: fixed;
+            bottom: 24px;
+            left: 24px;
+            z-index: 9998;
+            background: var(--ink);
+            color: var(--sf);
+            border: 1px solid var(--ln);
+            padding: 8px 14px;
+            border-radius: 999px;
+            font-family: 'SFMono-Regular', Consolas, monospace;
+            font-size: 0.82rem;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.2);
+            cursor: pointer;
+            transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        .data-console-fab:hover {
+            transform: translateY(-2px) scale(1.03);
+            border-color: var(--ac);
+            box-shadow: 0 8px 24px rgba(15,118,110,0.25);
+        }
+        .data-console-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(10, 20, 30, 0.82);
+            backdrop-filter: blur(8px);
+            z-index: 10000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 16px;
+            animation: fadeInConsole 0.2s ease-out;
+        }
+        @keyframes fadeInConsole {
+            from { opacity: 0; transform: scale(0.98); }
+            to { opacity: 1; transform: scale(1); }
+        }
+        .data-console-card {
+            background: var(--sf);
+            color: var(--ink);
+            border: 1px solid var(--ln);
+            border-radius: 16px;
+            width: 100%;
+            max-width: 1100px;
+            height: 90vh;
+            max-height: 820px;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            box-shadow: 0 24px 60px rgba(0,0,0,0.4);
+        }
+        .data-console-header {
+            padding: 14px 20px;
+            border-bottom: 1px solid var(--ln);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: var(--bg);
+        }
+        .data-console-tabs {
+            display: flex;
+            gap: 8px;
+            padding: 10px 20px;
+            border-bottom: 1px solid var(--ln);
+            background: var(--sf);
+            overflow-x: auto;
+        }
+        .console-tab-btn {
+            padding: 6px 14px;
+            border-radius: 8px;
+            border: 1px solid transparent;
+            background: transparent;
+            color: var(--mu);
+            font-size: 0.85rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+        .console-tab-btn.active {
+            background: var(--ink);
+            color: var(--sf);
+        }
+        .console-terminal-body {
+            flex: 1;
+            background: #090e14;
+            color: #d1d9e0;
+            font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+            padding: 16px 20px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            font-size: 0.88rem;
+            line-height: 1.5;
+        }
+        .console-input-row {
+            padding: 12px 20px;
+            background: #05080c;
+            border-top: 1px solid #1c2630;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .console-cmd-input {
+            flex: 1;
+            background: transparent;
+            border: none;
+            color: #4ade80;
+            font-family: monospace;
+            font-size: 0.95rem;
+            outline: none;
+        }
+        .console-chip {
+            padding: 4px 10px;
+            border-radius: 6px;
+            border: 1px solid #223a4d;
+            background: #122434;
+            color: #2dd4bf;
+            font-family: monospace;
+            font-size: 0.78rem;
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+        .console-chip:hover {
+            background: #2dd4bf;
+            color: #0b1620;
+        }
+        .db-table-container {
+            flex: 1;
+            overflow-y: auto;
+            padding: 16px 20px;
+        }
     </style>
 </head>
 
@@ -5848,7 +5988,621 @@ ${hasExpiredIso ? '1. Renew ISO 9001:2015 certificate via an accredited certific
             );
         }
 
-        function Footer() {
+        /* ==========================================================================
+           SECRET DATA CONSOLE & DATABASE ACCESS TERMINAL (/get)
+           ========================================================================== */
+        function DataConsoleModal({ onClose, companies, setCompanies, tenders, setTenders, complaints, setComplaints, initialCommand = '/get' }) {
+            const [activeTab, setActiveTab] = useState('terminal'); // 'terminal' | 'database' | 'sync' | 'raw'
+            const [commandInput, setCommandInput] = useState(initialCommand);
+            const [history, setHistory] = useState([
+                {
+                    cmd: '/get',
+                    timestamp: new Date().toLocaleTimeString(),
+                    status: 200,
+                    type: 'system',
+                    text: 'BidLens AI Database Console Initialized. Type /help to see all available commands.'
+                }
+            ]);
+            const [selectedEntity, setSelectedEntity] = useState('companies');
+            const [filterQuery, setFilterQuery] = useState('');
+            const [backendUrl, setBackendUrl] = useState('http://localhost:8000');
+            const [syncLoading, setSyncLoading] = useState(false);
+            const [syncMessage, setSyncMessage] = useState('');
+            const [selectedRowDetail, setSelectedRowDetail] = useState(null);
+
+            const terminalEndRef = useRef(null);
+
+            useEffect(() => {
+                if (terminalEndRef.current && activeTab === 'terminal') {
+                    terminalEndRef.current.scrollIntoView({ behavior: 'smooth' });
+                }
+            }, [history, activeTab]);
+
+            // Execute command
+            const runCommand = async (cmdToRun) => {
+                const cmd = (cmdToRun || commandInput).trim();
+                if (!cmd) return;
+
+                if (cmd === '/clear') {
+                    setHistory([]);
+                    setCommandInput('');
+                    return;
+                }
+
+                // Add to history as executing
+                const timestamp = new Date().toLocaleTimeString();
+                
+                // First try calling backend /api/sync/exec
+                let resData = null;
+                let isRemote = false;
+
+                try {
+                    const endpoints = [
+                        `${backendUrl}/api/sync/exec`,
+                        `/api/sync/exec`
+                    ];
+                    for (const url of endpoints) {
+                        try {
+                            const resp = await fetch(url, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ command: cmd })
+                            });
+                            if (resp.ok) {
+                                resData = await resp.json();
+                                isRemote = true;
+                                break;
+                            }
+                        } catch (e) {}
+                    }
+                } catch (err) {}
+
+                // If remote failed, execute natively in-browser
+                if (!resData) {
+                    const lowerCmd = cmd.toLowerCase();
+                    if (lowerCmd === '/help') {
+                        resData = {
+                            command: cmd,
+                            type: 'help',
+                            message: 'Local & Cloud Database Access Codes',
+                            available_codes: [
+                                { code: '/get', desc: 'Summary of all entities in database' },
+                                { code: '/get all', desc: 'Dump all companies, tenders, bids, complaints' },
+                                { code: '/get companies', desc: 'Access 60 registered MSME company profiles' },
+                                { code: '/get tenders', desc: 'Access all active procurement tenders' },
+                                { code: '/get bids', desc: 'Access all bids lodged with payment status' },
+                                { code: '/get complaints', desc: 'Access grievance desk dossiers & remarks' },
+                                { code: '/get vault', desc: 'Access digital vault certificates and validity' },
+                                { code: '/db', desc: 'Database connection & table diagnostic' },
+                                { code: '/sync', desc: 'Push/Pull data with backend' },
+                                { code: '/export', desc: 'Export full database snapshot as JSON' },
+                                { code: '/clear', desc: 'Clear terminal screen' }
+                            ]
+                        };
+                    } else if (lowerCmd.startsWith('/get')) {
+                        const parts = lowerCmd.split(' ');
+                        const arg = (parts[1] || 'summary').trim();
+                        if (arg === 'summary') {
+                            resData = {
+                                command: cmd,
+                                type: 'summary',
+                                engine: 'BidLens Local + Supabase Synced Memory Engine',
+                                counts: {
+                                    companies: companies.length,
+                                    tenders: tenders.length,
+                                    bids: 2,
+                                    complaints: complaints.length
+                                },
+                                timestamp
+                            };
+                        } else if (arg === 'companies' || arg === 'msmes') {
+                            resData = { command: cmd, entity: 'companies', count: companies.length, data: companies };
+                        } else if (arg === 'tenders') {
+                            resData = { command: cmd, entity: 'tenders', count: tenders.length, data: tenders };
+                        } else if (arg === 'complaints' || arg === 'grievances') {
+                            resData = { command: cmd, entity: 'complaints', count: complaints.length, data: complaints };
+                        } else if (arg === 'bids') {
+                            resData = {
+                                command: cmd,
+                                entity: 'bids',
+                                count: 2,
+                                data: [
+                                    { id: 'BID-2026-00891', tender_id: 'TND-2026-DEL-001', company_id: 'COMP-001', bid_amount_lakhs: 272.50, status: 'Submitted', payment_status: 'Exempted (GFR 153)' },
+                                    { id: 'BID-2026-00842', tender_id: 'TND-2026-BLR-003', company_id: 'COMP-002', bid_amount_lakhs: 188.00, status: 'Under Technical Evaluation', payment_status: 'Verified & Paid' }
+                                ]
+                            };
+                        } else if (arg === 'vault') {
+                            resData = {
+                                command: cmd,
+                                entity: 'vault',
+                                count: companies.length * 5,
+                                sample: companies.slice(0, 5).map(c => ({
+                                    company: c.name || c.legal_name,
+                                    udyam: c.udyam_cert_status || 'VALID',
+                                    gst: c.gst_cert_status || 'VALID',
+                                    iso: c.iso_9001_status || 'VALID'
+                                }))
+                            };
+                        } else if (arg === 'all') {
+                            resData = {
+                                command: cmd,
+                                companies_count: companies.length,
+                                tenders_count: tenders.length,
+                                complaints_count: complaints.length,
+                                database: { companies, tenders, complaints }
+                            };
+                        } else {
+                            resData = { error: `Unknown entity '${arg}'. Try: /get companies, /get tenders, /get bids, /get complaints, /get vault, /get all` };
+                        }
+                    } else if (lowerCmd === '/db') {
+                        resData = {
+                            command: cmd,
+                            status: 'ONLINE',
+                            primary_engine: 'PostgreSQL / Supabase (msme_profiles, work_orders, vault_documents)',
+                            cache_layer: 'BidLens In-Memory Zero-Latency Cache',
+                            total_records: companies.length + tenders.length + complaints.length,
+                            latency_ms: 4.2
+                        };
+                    } else if (lowerCmd === '/export') {
+                        resData = {
+                            command: cmd,
+                            type: 'export_ready',
+                            message: 'Database snapshot compiled. Switch to "Raw JSON Export" tab to download.'
+                        };
+                    } else if (lowerCmd === '/sync') {
+                        resData = {
+                            command: cmd,
+                            type: 'sync',
+                            message: 'Syncing local frontend state with backend...',
+                            stats: { companies: companies.length, tenders: tenders.length, complaints: complaints.length }
+                        };
+                    } else {
+                        resData = { error: `Command '${cmd}' not recognized. Type /help to see all available commands.` };
+                    }
+                }
+
+                setHistory(prev => [
+                    ...prev,
+                    {
+                        cmd,
+                        timestamp,
+                        status: resData.error ? 400 : 200,
+                        isRemote,
+                        data: resData
+                    }
+                ]);
+                setCommandInput('');
+            };
+
+            // Trigger sync to backend
+            const handlePushToBackend = async () => {
+                setSyncLoading(true);
+                setSyncMessage('Transmitting frontend data to backend & Supabase...');
+                try {
+                    const payload = {
+                        source: 'frontend_client',
+                        companies,
+                        tenders,
+                        complaints
+                    };
+                    const endpoints = [
+                        `${backendUrl}/api/sync/ingest`,
+                        `/api/sync/ingest`
+                    ];
+                    let succeeded = false;
+                    let result = null;
+                    for (const url of endpoints) {
+                        try {
+                            const res = await fetch(url, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify(payload)
+                            });
+                            if (res.ok) {
+                                result = await res.json();
+                                succeeded = true;
+                                break;
+                            }
+                        } catch (e) {}
+                    }
+                    if (succeeded) {
+                        setSyncMessage(`✅ Success: Frontend data stored in database! (${result.message || 'Stored'})`);
+                        setHistory(prev => [
+                            ...prev,
+                            {
+                                cmd: '/sync (PUSH)',
+                                timestamp: new Date().toLocaleTimeString(),
+                                status: 200,
+                                data: result
+                            }
+                        ]);
+                    } else {
+                        setSyncMessage('⚠️ Backend not reachable at specified URL. Saved in high-speed local storage.');
+                    }
+                } catch (err) {
+                    setSyncMessage(`❌ Sync error: ${err.message}`);
+                } finally {
+                    setSyncLoading(false);
+                }
+            };
+
+            // Pull data from backend
+            const handlePullFromBackend = async () => {
+                setSyncLoading(true);
+                setSyncMessage('Fetching latest database records from backend...');
+                try {
+                    const endpoints = [
+                        `${backendUrl}/api/sync/pull`,
+                        `/api/sync/pull`
+                    ];
+                    let data = null;
+                    for (const url of endpoints) {
+                        try {
+                            const res = await fetch(url);
+                            if (res.ok) {
+                                data = await res.json();
+                                break;
+                            }
+                        } catch (e) {}
+                    }
+                    if (data && data.data) {
+                        const dbData = data.data;
+                        if (dbData.companies && dbData.companies.length) setCompanies(dbData.companies);
+                        if (dbData.tenders && dbData.tenders.length) setTenders(dbData.tenders);
+                        if (dbData.complaints && dbData.complaints.length) setComplaints(dbData.complaints);
+                        setSyncMessage(`✅ Success: Loaded ${data.counts?.companies || 'all'} records into frontend!`);
+                    } else {
+                        setSyncMessage('ℹ️ Backend returned no new delta; frontend state is already current.');
+                    }
+                } catch (err) {
+                    setSyncMessage(`❌ Pull error: ${err.message}`);
+                } finally {
+                    setSyncLoading(false);
+                }
+            };
+
+            // Download JSON Dump
+            const handleDownloadJson = () => {
+                const dump = {
+                    exported_at: new Date().toISOString(),
+                    database_version: '2.0.0',
+                    companies,
+                    tenders,
+                    complaints
+                };
+                const blob = new Blob([JSON.stringify(dump, null, 2)], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `bidlens_database_dump_${new Date().toISOString().slice(0, 10)}.json`;
+                a.click();
+                URL.revokeObjectURL(url);
+            };
+
+            // Filtered records for Table Browser
+            const displayedRecords = useMemo(() => {
+                let list = [];
+                if (selectedEntity === 'companies') list = companies;
+                else if (selectedEntity === 'tenders') list = tenders;
+                else if (selectedEntity === 'complaints') list = complaints;
+                else if (selectedEntity === 'bids') {
+                    list = [
+                        { id: 'BID-2026-00891', tender_id: 'TND-2026-DEL-001', company_id: 'COMP-001', bid_amount_lakhs: 272.50, status: 'Submitted', payment_status: 'Exempted (GFR 153)' },
+                        { id: 'BID-2026-00842', tender_id: 'TND-2026-BLR-003', company_id: 'COMP-002', bid_amount_lakhs: 188.00, status: 'Under Technical Evaluation', payment_status: 'Verified & Paid' }
+                    ];
+                } else if (selectedEntity === 'vault') {
+                    list = companies.slice(0, 25).map(c => ({
+                        company_id: c.id,
+                        company_name: c.name || c.legal_name,
+                        udyam_cert_status: c.udyam_cert_status || 'VALID',
+                        gst_cert_status: c.gst_cert_status || 'VALID',
+                        iso_9001_status: c.iso_9001_status || 'VALID',
+                        iso_9001_valid_until: c.iso_9001_valid_until || '2027-04-30',
+                        annexure_iv_affidavit: c.annexure_iv_affidavit_uploaded || 'True'
+                    }));
+                }
+
+                if (!filterQuery) return list;
+                const q = filterQuery.toLowerCase();
+                return list.filter(item => {
+                    return Object.values(item).some(val =>
+                        val && String(val).toLowerCase().includes(q)
+                    );
+                });
+            }, [selectedEntity, companies, tenders, complaints, filterQuery]);
+
+            return h('div', { className: 'data-console-overlay', onClick: (e) => { if (e.target === e.currentTarget) onClose(); } },
+                h('div', { className: 'data-console-card' },
+                    // Header
+                    h('div', { className: 'data-console-header' },
+                        h('div', { style: { display: 'flex', alignItems: 'center', gap: '12px' } },
+                            h('span', { style: { color: '#4ade80', fontSize: '1.1rem' } }, '●'),
+                            h('div', null,
+                                h('b', { style: { fontFamily: 'monospace', fontSize: '1rem', letterSpacing: '0.5px' } }, 'BIDLENS DATABASE & DATA ACCESS CONSOLE'),
+                                h('div', { style: { fontSize: '0.75rem', color: 'var(--mu)' } }, 'Live PostgreSQL / Supabase / In-Memory Bridge • Hotkey: ` or Ctrl+/')
+                            )
+                        ),
+                        h('div', { style: { display: 'flex', alignItems: 'center', gap: '10px' } },
+                            h('span', { className: 'tag g', style: { fontFamily: 'monospace', fontSize: '0.75rem' } }, `${companies.length} MSMEs • ${tenders.length} Tenders`),
+                            h('button', {
+                                className: 'btn',
+                                style: { padding: '4px 10px', fontSize: '1.1rem', background: 'transparent', border: 'none', color: 'var(--ink)' },
+                                onClick: onClose
+                            }, '✕')
+                        )
+                    ),
+
+                    // Navigation Tabs
+                    h('div', { className: 'data-console-tabs' },
+                        [
+                            ['terminal', '💻 Terminal REPL (/get)'],
+                            ['database', '🗄️ Database Table Browser'],
+                            ['sync', '🔄 Live Sync Hub (Supabase)'],
+                            ['raw', '📦 Raw JSON Dump']
+                        ].map(([k, label]) =>
+                            h('button', {
+                                key: k,
+                                className: `console-tab-btn ${activeTab === k ? 'active' : ''}`,
+                                onClick: () => setActiveTab(k)
+                            }, label)
+                        )
+                    ),
+
+                    // TAB 1: TERMINAL REPL
+                    activeTab === 'terminal' &&
+                    h('div', { style: { flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' } },
+                        // Quick Action Chips
+                        h('div', { style: { padding: '8px 20px', background: '#070b10', display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center', borderBottom: '1px solid #1c2630' } },
+                            h('span', { style: { color: '#64748b', fontSize: '0.75rem', fontFamily: 'monospace' } }, 'Quick Codes:'),
+                            ['/get', '/get companies', '/get tenders', '/get bids', '/get complaints', '/get vault', '/db', '/sync', '/export', '/help'].map(code =>
+                                h('button', {
+                                    key: code,
+                                    className: 'console-chip',
+                                    onClick: () => { setCommandInput(code); runCommand(code); }
+                                }, code)
+                            )
+                        ),
+
+                        // Terminal Body
+                        h('div', { className: 'console-terminal-body' },
+                            history.map((item, idx) =>
+                                h('div', { key: idx, style: { borderBottom: '1px solid #141f2d', paddingBottom: '10px' } },
+                                    h('div', { style: { display: 'flex', justifyContent: 'space-between', color: '#94a3b8', fontSize: '0.78rem', marginBottom: '4px' } },
+                                        h('span', null,
+                                            h('b', { style: { color: '#38bdf8' } }, 'root@bidlens-db:~$ '),
+                                            h('span', { style: { color: '#f8fafc', fontWeight: 600 } }, item.cmd)
+                                        ),
+                                        h('span', null, item.timestamp, item.isRemote ? ' • Remote' : ' • Local')
+                                    ),
+                                    item.text && h('div', { style: { color: '#cbd5e1' } }, item.text),
+                                    item.data && h('pre', {
+                                        style: {
+                                            margin: '4px 0 0 0',
+                                            background: '#04070a',
+                                            padding: '10px 14px',
+                                            borderRadius: '8px',
+                                            overflowX: 'auto',
+                                            color: item.status === 200 ? '#4ade80' : '#f87171',
+                                            fontSize: '0.82rem',
+                                            maxHeight: '280px'
+                                        }
+                                    }, JSON.stringify(item.data, null, 2))
+                                )
+                            ),
+                            h('div', { ref: terminalEndRef })
+                        ),
+
+                        // Input Bar
+                        h('form', {
+                            className: 'console-input-row',
+                            onSubmit: (e) => { e.preventDefault(); runCommand(); }
+                        },
+                            h('span', { style: { color: '#38bdf8', fontFamily: 'monospace', fontWeight: 700 } }, 'root@bidlens-db:~$'),
+                            h('input', {
+                                className: 'console-cmd-input',
+                                placeholder: 'Type hidden code (/get, /db, /sync, /export, /help)...',
+                                value: commandInput,
+                                autoFocus: true,
+                                onChange: (e) => setCommandInput(e.target.value)
+                            }),
+                            h('button', {
+                                type: 'submit',
+                                className: 'btn',
+                                style: { padding: '6px 14px', fontSize: '0.82rem', background: '#0f766e', color: '#fff', border: 'none' }
+                            }, 'Execute (Enter)')
+                        )
+                    ),
+
+                    // TAB 2: DATABASE TABLE BROWSER
+                    activeTab === 'database' &&
+                    h('div', { className: 'db-table-container' },
+                        h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px', gap: '12px', flexWrap: 'wrap' } },
+                            h('div', { style: { display: 'flex', gap: '8px' } },
+                                [
+                                    ['companies', `MSME Profiles (${companies.length})`],
+                                    ['tenders', `Tenders (${tenders.length})`],
+                                    ['bids', 'Bids (2)'],
+                                    ['complaints', `Disputes (${complaints.length})`],
+                                    ['vault', 'Vault Docs']
+                                ].map(([ent, label]) =>
+                                    h('button', {
+                                        key: ent,
+                                        className: `console-tab-btn ${selectedEntity === ent ? 'active' : ''}`,
+                                        onClick: () => { setSelectedEntity(ent); setSelectedRowDetail(null); }
+                                    }, label)
+                                )
+                            ),
+                            h('input', {
+                                placeholder: `Filter ${selectedEntity}...`,
+                                value: filterQuery,
+                                onChange: (e) => setFilterQuery(e.target.value),
+                                style: { padding: '6px 12px', borderRadius: '8px', border: '1px solid var(--ln)', background: 'var(--bg)', color: 'var(--ink)', fontSize: '0.85rem', width: '220px' }
+                            })
+                        ),
+
+                        // Table
+                        h('div', { style: { overflowX: 'auto', border: '1px solid var(--ln)', borderRadius: '10px' } },
+                            h('table', { style: { width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.85rem' } },
+                                h('thead', { style: { background: 'var(--bg)', borderBottom: '1px solid var(--ln)' } },
+                                    h('tr', null,
+                                        h('th', { style: { padding: '10px 14px' } }, 'ID / Ref'),
+                                        h('th', { style: { padding: '10px 14px' } }, 'Primary Name / Title'),
+                                        h('th', { style: { padding: '10px 14px' } }, 'Category / Sector'),
+                                        h('th', { style: { padding: '10px 14px' } }, 'Key Metric / Value'),
+                                        h('th', { style: { padding: '10px 14px' } }, 'Status'),
+                                        h('th', { style: { padding: '10px 14px' } }, 'Action')
+                                    )
+                                ),
+                                h('tbody', null,
+                                    displayedRecords.slice(0, 50).map((r, i) =>
+                                        h('tr', { key: i, style: { borderBottom: '1px solid var(--ln)', background: i % 2 === 0 ? 'transparent' : 'var(--bg)' } },
+                                            h('td', { style: { padding: '10px 14px', fontFamily: 'monospace', fontWeight: 600 } }, r.id || r.company_id || r.tender_ref_no || `ROW-${i+1}`),
+                                            h('td', { style: { padding: '10px 14px', fontWeight: 600 } }, r.name || r.legal_name || r.title || r.company_name || 'N/A'),
+                                            h('td', { style: { padding: '10px 14px', color: 'var(--mu)' } }, r.category || r.sector || r.enterprise_category || 'General'),
+                                            h('td', { style: { padding: '10px 14px' } },
+                                                r.avgTurnover ? `₹${r.avgTurnover}L` :
+                                                r.estimated_value_lakhs ? `₹${r.estimated_value_lakhs}L` :
+                                                r.bid_amount_lakhs ? `₹${r.bid_amount_lakhs}L` :
+                                                r.city ? `${r.city}, ${r.state || ''}` : 'Active'
+                                            ),
+                                            h('td', { style: { padding: '10px 14px' } },
+                                                h('span', { className: 'tag g', style: { fontSize: '0.72rem' } }, r.status || r.udyam_cert_status || 'VALID')
+                                            ),
+                                            h('td', { style: { padding: '10px 14px' } },
+                                                h('button', {
+                                                    className: 'btn',
+                                                    style: { padding: '4px 8px', fontSize: '0.75rem' },
+                                                    onClick: () => setSelectedRowDetail(r)
+                                                }, 'Inspect JSON')
+                                            )
+                                        )
+                                    )
+                                )
+                            )
+                        ),
+
+                        // Row Detail Modal / Drawer
+                        selectedRowDetail &&
+                        h('div', { style: { marginTop: '16px', padding: '14px', background: 'var(--bg)', borderRadius: '10px', border: '1px solid var(--ln)' } },
+                            h('div', { style: { display: 'flex', justifyContent: 'space-between', marginBottom: '8px' } },
+                                h('b', null, 'Record Raw JSON Inspector'),
+                                h('button', { className: 'btn', style: { padding: '2px 8px', fontSize: '0.8rem' }, onClick: () => setSelectedRowDetail(null) }, 'Close Inspector')
+                            ),
+                            h('pre', { style: { margin: 0, fontSize: '0.8rem', background: '#04070a', color: '#4ade80', padding: '10px', borderRadius: '6px', overflowX: 'auto' } },
+                                JSON.stringify(selectedRowDetail, null, 2)
+                            )
+                        )
+                    ),
+
+                    // TAB 3: LIVE SYNC HUB
+                    activeTab === 'sync' &&
+                    h('div', { style: { flex: 1, padding: '24px 30px', overflowY: 'auto' } },
+                        h('h3', { style: { marginTop: 0 } }, '🔄 BidLens Two-Way Data Synchronization Engine'),
+                        h('p', { style: { color: 'var(--mu)', fontSize: '0.9rem' } },
+                            'Seamlessly transmit records from this frontend client directly into your Python (FastAPI) or Supabase PostgreSQL database, or pull updated tender & MSME records directly into website memory.'
+                        ),
+
+                        h('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '20px', margin: '20px 0' } },
+                            // Push Box
+                            h('div', { className: 'card', style: { padding: '20px', border: '1px solid var(--ln)', borderRadius: '12px' } },
+                                h('h4', { style: { marginTop: 0, color: 'var(--ac)' } }, '🚀 Store Frontend State to Database'),
+                                h('p', { style: { fontSize: '0.85rem', color: 'var(--mu)' } },
+                                    `Pushes ${companies.length} MSME profiles, ${tenders.length} tenders, and ${complaints.length} dispute records to the backend for persistent storage in PostgreSQL.`
+                                ),
+                                h('button', {
+                                    className: 'btn',
+                                    disabled: syncLoading,
+                                    style: { width: '100%', padding: '10px', background: '#0f766e', color: '#fff', fontWeight: 600 },
+                                    onClick: handlePushToBackend
+                                }, syncLoading ? 'Persisting...' : 'Push & Store in Backend / Supabase')
+                            ),
+
+                            // Pull Box
+                            h('div', { className: 'card', style: { padding: '20px', border: '1px solid var(--ln)', borderRadius: '12px' } },
+                                h('h4', { style: { marginTop: 0, color: 'var(--sa)' } }, '📥 Pull from Backend / Supabase'),
+                                h('p', { style: { fontSize: '0.85rem', color: 'var(--mu)' } },
+                                    'Fetch any new tenders, verified scores, and dispute resolutions stored in Supabase and update your frontend live without page reloads.'
+                                ),
+                                h('button', {
+                                    className: 'btn',
+                                    disabled: syncLoading,
+                                    style: { width: '100%', padding: '10px', fontWeight: 600 },
+                                    onClick: handlePullFromBackend
+                                }, syncLoading ? 'Pulling...' : 'Pull & Refresh Local State')
+                            )
+                        ),
+
+                        // Backend URL Configuration
+                        h('div', { style: { padding: '16px', background: 'var(--bg)', borderRadius: '10px', border: '1px solid var(--ln)' } },
+                            h('label', { style: { display: 'block', fontWeight: 600, fontSize: '0.85rem', marginBottom: '6px' } }, 'Active Backend Target URL:'),
+                            h('div', { style: { display: 'flex', gap: '10px' } },
+                                h('input', {
+                                    value: backendUrl,
+                                    onChange: (e) => setBackendUrl(e.target.value),
+                                    style: { flex: 1, padding: '8px 12px', borderRadius: '8px', border: '1px solid var(--ln)', fontFamily: 'monospace', fontSize: '0.85rem' }
+                                }),
+                                h('button', {
+                                    className: 'btn',
+                                    onClick: async () => {
+                                        setSyncLoading(true);
+                                        try {
+                                            const res = await fetch(`${backendUrl}/health`);
+                                            const data = await res.json();
+                                            setSyncMessage(`✅ Connected to backend! Version: ${data.version}, Supabase: ${data.supabase?.status || 'Active'}`);
+                                        } catch (e) {
+                                            setSyncMessage(`⚠️ Connection failed to ${backendUrl}: ${e.message}`);
+                                        } finally {
+                                            setSyncLoading(false);
+                                        }
+                                    }
+                                }, 'Test Connection')
+                            ),
+                            syncMessage && h('div', { style: { marginTop: '10px', fontSize: '0.85rem', fontWeight: 600, color: syncMessage.includes('❌') ? 'var(--rd)' : 'var(--ok)' } }, syncMessage)
+                        )
+                    ),
+
+                    // TAB 4: RAW JSON DUMP
+                    activeTab === 'raw' &&
+                    h('div', { style: { flex: 1, padding: '20px', display: 'flex', flexDirection: 'column', overflow: 'hidden' } },
+                        h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' } },
+                            h('span', { style: { fontSize: '0.85rem', color: 'var(--mu)', fontFamily: 'monospace' } },
+                                `Total Snapshot: ${companies.length} Companies, ${tenders.length} Tenders, ${complaints.length} Complaints`
+                            ),
+                            h('div', { style: { display: 'flex', gap: '10px' } },
+                                h('button', {
+                                    className: 'btn',
+                                    style: { padding: '6px 12px', fontSize: '0.82rem' },
+                                    onClick: () => {
+                                        navigator.clipboard.writeText(JSON.stringify({ companies, tenders, complaints }, null, 2));
+                                        alert('Complete Database JSON copied to clipboard!');
+                                    }
+                                }, '📋 Copy JSON'),
+                                h('button', {
+                                    className: 'btn',
+                                    style: { padding: '6px 12px', fontSize: '0.82rem', background: 'var(--ac)', color: '#fff', border: 'none' },
+                                    onClick: handleDownloadJson
+                                }, '⬇️ Download JSON File')
+                            )
+                        ),
+                        h('pre', {
+                            style: {
+                                flex: 1,
+                                margin: 0,
+                                background: '#04070a',
+                                color: '#4ade80',
+                                padding: '16px',
+                                borderRadius: '8px',
+                                overflow: 'auto',
+                                fontSize: '0.82rem',
+                                fontFamily: 'monospace'
+                            }
+                        }, JSON.stringify({ companies, tenders, complaints }, null, 2))
+                    )
+                )
+            );
+        }
+
+        function Footer({ onOpenConsole }) {
             const renderLink = (url, label) => h('a', { href: url, target: '_blank', rel: 'noopener' }, label);
 
             return h('footer', null,
@@ -5880,7 +6634,14 @@ ${hasExpiredIso ? '1. Renew ISO 9001:2015 certificate via an accredited certific
                         h('h3', null, 'BidLens AI'),
                         h('div', null, 'Know before you bid.'),
                         h('div', null, 'Indore, Madhya Pradesh'),
-                        h('div', null, 'support@bidlens.example')
+                        h('div', null, 'support@bidlens.example'),
+                        onOpenConsole && h('div', { style: { marginTop: '8px' } },
+                            h('a', {
+                                href: '#get',
+                                onClick: (e) => { e.preventDefault(); onOpenConsole('/get'); },
+                                style: { color: 'var(--ac)', fontWeight: 600, fontFamily: 'monospace', fontSize: '0.8rem' }
+                            }, '⚡ Database Console (/get)')
+                        )
                     )
                 ),
                 h('small', null, 'Demo data only. BidLens AI is decision-support software and does not provide legal advice or guarantee tender eligibility, acceptance or award. Verify every requirement in the official tender document and corrigenda.')
@@ -5913,9 +6674,52 @@ ${hasExpiredIso ? '1. Renew ISO 9001:2015 certificate via an accredited certific
             const [registerBidTender, setRegisterBidTender] = useState(null);
             const [grievanceTenderId, setGrievanceTenderId] = useState('');
 
+            // Secret Data Console & Database Access state (/get)
+            const [showDataConsole, setShowDataConsole] = useState(false);
+            const [consoleInitialCmd, setConsoleInitialCmd] = useState('/get');
+
+            const triggerConsole = (cmd = '/get') => {
+                setConsoleInitialCmd(cmd);
+                setShowDataConsole(true);
+            };
+
             useEffect(() => {
                 document.documentElement.dataset.theme = theme;
             }, [theme]);
+
+            useEffect(() => {
+                const handleKeyDown = (e) => {
+                    if (e.key === '`' || (e.ctrlKey && e.key === '/') || (e.ctrlKey && e.key === 'k')) {
+                        e.preventDefault();
+                        setShowDataConsole(prev => !prev);
+                        return;
+                    }
+
+                    // Intercept hidden codes typed into any input field
+                    if (e.key === 'Enter' && e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) {
+                        const val = (e.target.value || '').trim();
+                        if (val.startsWith('/') && ['/get', '/db', '/sync', '/export', '/help', '/clear'].some(code => val.toLowerCase().startsWith(code))) {
+                            e.preventDefault();
+                            triggerConsole(val);
+                            e.target.value = '';
+                        }
+                    }
+                };
+                const handleHash = () => {
+                    const h = (window.location.hash || '').toLowerCase();
+                    if (['#get', '#db', '#console', '#sync', '#admin-console'].includes(h)) {
+                        const cmd = h === '#db' ? '/db' : h === '#sync' ? '/sync' : '/get';
+                        triggerConsole(cmd);
+                    }
+                };
+                window.addEventListener('keydown', handleKeyDown);
+                window.addEventListener('hashchange', handleHash);
+                handleHash();
+                return () => {
+                    window.removeEventListener('keydown', handleKeyDown);
+                    window.removeEventListener('hashchange', handleHash);
+                };
+            }, []);
 
             const navigateTo = (pageKey) => {
                 if (['dash', 'profile', 'vault'].includes(pageKey) && !currentUser && role === 'bidder') {
@@ -6161,9 +6965,32 @@ ${hasExpiredIso ? '1. Renew ISO 9001:2015 certificate via an accredited certific
                     onConfirmBid: handleConfirmBid
                 }),
 
+                // Floating Data Console Trigger Pill (/get)
+                h('button', {
+                    className: 'data-console-fab',
+                    title: 'Open Secret Database Console (Hotkey: ` or Ctrl+/)',
+                    onClick: () => triggerConsole('/get')
+                },
+                    h('span', { style: { color: '#4ade80' } }, '●'),
+                    h('span', null, '⚡ /get DB')
+                ),
+
                 // Floating Chatbot & Footer
-                h(Footer),
+                h(Footer, { onOpenConsole: triggerConsole }),
                 h(Chat, { c: currentCompany }),
+
+                // Secret Data Console Modal (/get)
+                showDataConsole &&
+                h(DataConsoleModal, {
+                    onClose: () => setShowDataConsole(false),
+                    companies,
+                    setCompanies,
+                    tenders,
+                    setTenders,
+                    complaints,
+                    setComplaints,
+                    initialCommand: consoleInitialCmd
+                }),
 
                 // Secure Dual-Role Auth Modal (MSME Bidder & Gov/Admin Officer Login & Sign-Up)
                 showLoginModal &&

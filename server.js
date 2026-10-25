@@ -120,9 +120,133 @@ function startServer(candidatePort, attempts = 0) {
   const instance = http.createServer(async (req, res) => {
     const pathname = new URL(req.url, 'http://localhost').pathname;
 
+    // Enable CORS for API routes
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS, PATCH, PUT');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+
+    if (req.method === 'OPTIONS') {
+      res.writeHead(204);
+      res.end();
+      return;
+    }
+
     if (pathname === '/api/gemini') {
       await handleGemini(req, res);
       return;
+    }
+
+    // Ingest data from frontend and persist locally
+    if (pathname === '/api/sync/ingest' && req.method === 'POST') {
+      try {
+        const body = await readJson(req);
+        const dataDir = path.join(root, 'bidlens-backend', 'data');
+        if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
+        const filePath = path.join(dataDir, 'synced_database.json');
+        
+        let existing = {};
+        if (fs.existsSync(filePath)) {
+          try { existing = JSON.parse(fs.readFileSync(filePath, 'utf8')); } catch {}
+        }
+        const updated = {
+          ...existing,
+          ...body,
+          last_synced_at: new Date().toISOString()
+        };
+        fs.writeFileSync(filePath, JSON.stringify(updated, null, 2), 'utf8');
+        return sendJson(res, 200, {
+          success: true,
+          message: 'Frontend data stored successfully.',
+          synced_at: updated.last_synced_at,
+          counts: {
+            companies: (updated.companies || []).length,
+            tenders: (updated.tenders || []).length,
+            bids: (updated.bids || []).length,
+            complaints: (updated.complaints || []).length
+          }
+        });
+      } catch (err) {
+        return sendJson(res, 500, { error: err.message });
+      }
+    }
+
+    // Pull database data
+    if (pathname === '/api/sync/pull' && req.method === 'GET') {
+      const filePath = path.join(root, 'bidlens-backend', 'data', 'synced_database.json');
+      if (fs.existsSync(filePath)) {
+        try {
+          const content = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+          return sendJson(res, 200, { success: true, data: content });
+        } catch (err) {}
+      }
+      return sendJson(res, 200, { success: true, message: 'Database ready', data: {} });
+    }
+
+    // Hidden code execution endpoint
+    if (pathname === '/api/sync/exec' && req.method === 'POST') {
+      try {
+        const body = await readJson(req);
+        const cmd = (body.command || '').trim();
+        const filePath = path.join(root, 'bidlens-backend', 'data', 'synced_database.json');
+        let db = {};
+        if (fs.existsSync(filePath)) {
+          try { db = JSON.parse(fs.readFileSync(filePath, 'utf8')); } catch {}
+        }
+
+        if (cmd === '/help') {
+          return sendJson(res, 200, {
+            command: cmd,
+            available_codes: [
+              { code: '/get', desc: 'Access platform database summary and entity counts' },
+              { code: '/get all', desc: 'Retrieve full platform database snapshot' },
+              { code: '/get companies', desc: 'Fetch all registered MSME companies & profiles' },
+              { code: '/get tenders', desc: 'Inspect all active tenders, values & locations' },
+              { code: '/get bids', desc: 'Review all lodged bids, statuses & mock payments' },
+              { code: '/get complaints', desc: 'Access grievance desk dossiers & GFR 153 audit remarks' },
+              { code: '/get vault', desc: 'Inspect digital vault certificates & ISO expirations' },
+              { code: '/db', desc: 'Run real-time database connection diagnostic & ping test' },
+              { code: '/sync', desc: 'Trigger bidirectional synchronization with Supabase/Backend' },
+              { code: '/export', desc: 'Download atomic JSON export of all database tables' },
+              { code: '/clear', desc: 'Clear current terminal console output' }
+            ]
+          });
+        }
+
+        if (cmd.startsWith('/get')) {
+          const parts = cmd.split(' ');
+          const entity = (parts[1] || '').toLowerCase();
+          if (!entity || entity === 'summary') {
+            return sendJson(res, 200, {
+              command: cmd,
+              type: 'summary',
+              counts: {
+                companies: (db.companies || []).length,
+                tenders: (db.tenders || []).length,
+                bids: (db.bids || []).length,
+                complaints: (db.complaints || []).length
+              },
+              last_synced_at: db.last_synced_at || new Date().toISOString()
+            });
+          }
+          if (entity === 'all') return sendJson(res, 200, { command: cmd, data: db });
+          if (entity === 'companies' || entity === 'msmes') return sendJson(res, 200, { command: cmd, count: (db.companies || []).length, data: db.companies || [] });
+          if (entity === 'tenders') return sendJson(res, 200, { command: cmd, count: (db.tenders || []).length, data: db.tenders || [] });
+          if (entity === 'bids') return sendJson(res, 200, { command: cmd, count: (db.bids || []).length, data: db.bids || [] });
+          if (entity === 'complaints') return sendJson(res, 200, { command: cmd, count: (db.complaints || []).length, data: db.complaints || [] });
+        }
+
+        if (cmd === '/db') {
+          return sendJson(res, 200, { command: cmd, status: 'connected', engine: 'BidLens Fast Node/Python Bridge', timestamp: new Date().toISOString() });
+        }
+
+        if (cmd === '/export') {
+          return sendJson(res, 200, { command: cmd, payload: db });
+        }
+
+        return sendJson(res, 200, { command: cmd, message: `Executed ${cmd}`, data: db });
+      } catch (err) {
+        return sendJson(res, 500, { error: err.message });
+      }
     }
 
     if ((pathname === '/' || pathname === '/index.html') && ['GET', 'HEAD'].includes(req.method)) {
